@@ -39,19 +39,25 @@ private:
 	struct QueueFamilyIndices
 	{
 		std::optional<uint32_t> graphicsFamily;
+		std::optional<uint32_t> presentFamily;
 
-		bool IsComplete() { return graphicsFamily.has_value(); }
+		// Ensures the device has the features we need and can present to the surface.
+		bool IsComplete() { return graphicsFamily.has_value() && presentFamily.has_value(); }
 	};
 
 	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
 
 	void CreateLogicalDevice();
-	
+
+	void CreateSurface();
+
+private:
 	VkInstance m_instance;
 	VkDebugUtilsMessengerEXT m_debugMessenger;
 	VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
 	VkDevice m_device;
-	VkQueue m_graphicsQueue;
+	VkQueue m_graphicsQueue, m_presentQueue;
+	VkSurfaceKHR m_surface;
 	
 	GLFWwindow* m_window;
 };

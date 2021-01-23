@@ -1,6 +1,7 @@
 #include "hello_triangle.h"
 
 #include <map>
+#include <set>
 
 void HelloTriangle::Run()
 {
@@ -30,6 +31,7 @@ void HelloTriangle::InitVulkan()
 {
 	CreateInstance();
 	SetupDebugMessenger();
+	CreateSurface();
 	PickPhysicalDevice();
 	CreateLogicalDevice();
 }
@@ -315,6 +317,14 @@ HelloTriangle::QueueFamilyIndices HelloTriangle::FindQueueFamilies(VkPhysicalDev
 			indices.graphicsFamily = i;
 		}
 
+		// Can the device present to the surface?
+		VkBool32 presentSupport = false;
+		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_surface, &presentSupport);
+		if (presentSupport)
+		{
+			indices.presentFamily = i;
+		}
+		
 		if (indices.IsComplete())
 		{
 			break;
@@ -333,15 +343,21 @@ void HelloTriangle::CreateLogicalDevice()
 	
 	auto indices = FindQueueFamilies(m_physicalDevice);
 
+	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+	std::set<uint32_t> uniqueQueueFamilies = { indices.graphicsFamily.value(), indices.presentFamily.value() };
+	
 	// TODO: Extract all these into their own functions
 	// Describes the number of queues for a single queue family.
-	VkDeviceQueueCreateInfo queueCreateInfo{};
 	float queuePriority = 1;
+	for (auto& queueFamily : uniqueQueueFamilies)
 	{
+		VkDeviceQueueCreateInfo queueCreateInfo{};
 		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 		queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
 		queueCreateInfo.queueCount = 1;
 		queueCreateInfo.pQueuePriorities = &queuePriority;
+
+		queueCreateInfos.push_back(queueCreateInfo);
 	}
 
 	// Specify device features
@@ -354,8 +370,8 @@ void HelloTriangle::CreateLogicalDevice()
 	VkDeviceCreateInfo createInfo{};
 	{
 		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-		createInfo.pQueueCreateInfos = &queueCreateInfo;
-		createInfo.queueCreateInfoCount = 1;
+		createInfo.pQueueCreateInfos = queueCreateInfos.data();
+		createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
 		createInfo.pEnabledFeatures = &deviceFeatures;
 		createInfo.enabledExtensionCount = 0;
 
@@ -375,8 +391,17 @@ void HelloTriangle::CreateLogicalDevice()
 		throw std::runtime_error("Failed to create logical device");
 	}
 
-	// Assign handle to queue
+	// Assign handles to queue
 	vkGetDeviceQueue(m_device, indices.graphicsFamily.value(), 0, &m_graphicsQueue);
+	vkGetDeviceQueue(m_device, indices.presentFamily.value(), 0, &m_presentQueue);
+}
+
+void HelloTriangle::CreateSurface()
+{
+	if (glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create window surface");
+	}
 }
 
 void HelloTriangle::MainLoop()
@@ -397,6 +422,8 @@ void HelloTriangle::Cleanup()
 		DebugLayer::DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
 	}
 
+	vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+	
 	// Don't destroy physical device since it is destroyed implicitly when the instance is destroyed.
 	vkDestroyInstance(m_instance, nullptr);
 
