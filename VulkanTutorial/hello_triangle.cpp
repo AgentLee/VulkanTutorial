@@ -1,5 +1,7 @@
 #include "hello_triangle.h"
 
+#include <map>
+
 void HelloTriangle::Run()
 {
 	InitWindow();
@@ -28,6 +30,7 @@ void HelloTriangle::InitVulkan()
 {
 	CreateInstance();
 	SetupDebugMessenger();
+	PickPhysicalDevice();
 }
 
 void HelloTriangle::CreateInstance()
@@ -199,6 +202,99 @@ std::vector<const char*> HelloTriangle::GetRequiredExtensions()
 	return extensions;
 }
 
+void HelloTriangle::PickPhysicalDevice()
+{
+	uint32_t deviceCount = 0;
+	vkEnumeratePhysicalDevices(m_instance, &deviceCount, nullptr);
+
+	if (deviceCount == 0)
+	{
+		throw std::runtime_error("Vulkan supported GPU not detected");
+	}
+
+	std::vector<VkPhysicalDevice> devices(deviceCount);
+	vkEnumeratePhysicalDevices(m_instance, &deviceCount, devices.data());
+
+#ifdef SELECT_FIRST_DEVICE
+	for (const auto& device : devices)
+	{
+		if (IsDeviceCompatible(device))
+		{
+			m_physicalDevice = device;
+			break;
+		}
+	}
+
+	if (m_physicalDevice == VK_NULL_HANDLE)
+	{
+		throw std::runtime_error("Couldn't find suitable GPU");
+	}
+#else
+	// Query all GPUs and look for the best one.
+	std::multimap<int, VkPhysicalDevice> candidates;
+	for (const auto& device : devices)
+	{
+		int score = RateDeviceCompatibility(device);
+		candidates.insert(std::make_pair(score, device));
+	}
+
+	if (candidates.rbegin()->first > 0)
+	{
+		m_physicalDevice = candidates.rbegin()->second;
+	}
+	else
+	{
+		throw std::runtime_error("Couldn't find suitable GPU");
+	}
+#endif
+}
+
+bool HelloTriangle::IsDeviceCompatible(VkPhysicalDevice device)
+{
+#if 1
+	return true;
+#else
+	VkPhysicalDeviceProperties deviceProperties;
+	vkGetPhysicalDeviceProperties(device, &deviceProperties);
+
+	// Features include texture compression, 64 bit floats, multi viewport rendering (VR)
+	VkPhysicalDeviceFeatures deviceFeatures;
+	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+	// Return after finding the first compatible GPU and has required features
+	return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader;
+#endif
+}
+
+int HelloTriangle::RateDeviceCompatibility(VkPhysicalDevice device)
+{
+	int score = 0;
+
+	VkPhysicalDeviceProperties deviceProperties;
+	vkGetPhysicalDeviceProperties(device, &deviceProperties);
+
+	// Features include texture compression, 64 bit floats, multi viewport rendering (VR)
+	VkPhysicalDeviceFeatures deviceFeatures;
+	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+	
+	// Discrete GPUs have performance advantage.
+	if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+	{
+		score += 100;
+	}
+
+	// Maximum possible size of textures affects graphics quality
+	score += deviceProperties.limits.maxImageDimension2D;
+
+	// We need geometry shaders
+	if (!deviceFeatures.geometryShader)
+	{
+		score = 0;
+	}
+
+	return score;
+}
+
 void HelloTriangle::MainLoop()
 {
 	while (!glfwWindowShouldClose(m_window))
@@ -213,7 +309,8 @@ void HelloTriangle::Cleanup()
 	{
 		DebugLayer::DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
 	}
-	
+
+	// Don't destroy physical device since it is destroyed implicitly when the instance is destroyed.
 	vkDestroyInstance(m_instance, nullptr);
 
 	glfwDestroyWindow(m_window);

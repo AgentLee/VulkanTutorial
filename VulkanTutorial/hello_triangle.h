@@ -20,16 +20,24 @@ private:
 	void Cleanup();
 
 	void InitVulkan();
+	
 	void CreateInstance();
+
 	void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
 	// Need to set up the handle to the debug callback.
 	void SetupDebugMessenger();
 	bool CheckValidationLayerSupport();
 	// Return required list of extensions based on the enabled validation layers.
 	std::vector<const char*> GetRequiredExtensions();
+
+	// Look for graphics card to use.
+	void PickPhysicalDevice();
+	bool IsDeviceCompatible(VkPhysicalDevice device);
+	int RateDeviceCompatibility(VkPhysicalDevice device);
 	
 	VkInstance m_instance;
 	VkDebugUtilsMessengerEXT m_debugMessenger;
+	VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
 	
 	GLFWwindow* m_window;
 };
