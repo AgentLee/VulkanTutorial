@@ -33,7 +33,10 @@ private:
 
 	// Look for graphics card to use.
 	void PickPhysicalDevice();
+
+	// Check device compatibility
 	bool IsDeviceCompatible(VkPhysicalDevice device);
+	bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
 	int RateDeviceCompatibility(VkPhysicalDevice device);
 
 	struct QueueFamilyIndices
@@ -51,6 +54,20 @@ private:
 
 	void CreateSurface();
 
+	// The device needs to support these swap chain details.
+	struct SwapChainSupportDetails
+	{
+		VkSurfaceCapabilitiesKHR capabilities;		// min/max number of images in swap chain, swap chain dimensions, transform data
+		std::vector<VkSurfaceFormatKHR> formats;	// pixel format, color space
+		std::vector<VkPresentModeKHR> presentModes;	
+	};
+
+	SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
+	VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
+	VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
+	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
+	void CreateSwapChain();
+	
 private:
 	VkInstance m_instance;
 	VkDebugUtilsMessengerEXT m_debugMessenger;
@@ -58,6 +75,11 @@ private:
 	VkDevice m_device;
 	VkQueue m_graphicsQueue, m_presentQueue;
 	VkSurfaceKHR m_surface;
+
+	VkSwapchainKHR m_swapChain;
+	std::vector<VkImage> m_swapChainImages;
+	VkFormat m_swapChainImageFormat;
+	VkExtent2D m_swapChainExtent;
 	
 	GLFWwindow* m_window;
 };

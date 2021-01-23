@@ -1,10 +1,15 @@
 #include <iostream>
 
+// Screen coordinates
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
 const std::vector<const char*> g_validationLayers = {
 	"VK_LAYER_KHRONOS_validation",
+};
+
+const std::vector<const char*> g_deviceExtensions = {
+	VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 };
 
 #ifdef NDEBUG
