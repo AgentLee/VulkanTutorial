@@ -31,6 +31,11 @@ void HelloTriangle::InitVulkan()
 
 void HelloTriangle::CreateInstance()
 {
+	if (g_enableValidationLayers && !CheckValidationLayerSupport())
+	{
+		throw std::runtime_error("Validation layers requested are not available");
+	}
+	
 	// You can potentially optimize the application by filing out information in the struct.
 	VkApplicationInfo appInfo{};
 	{
@@ -41,7 +46,6 @@ void HelloTriangle::CreateInstance()
 		appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
 		appInfo.apiVersion = VK_API_VERSION_1_0;	// I have 1.2 installed, but stay consistent with tutorial.
 	}
-
 	
 	VkInstanceCreateInfo createInfo{};
 	{
@@ -94,6 +98,16 @@ void HelloTriangle::CreateInstance()
 		createInfo.ppEnabledExtensionNames = glfwExtensions;
 
 		createInfo.enabledLayerCount = 0;
+
+		if (g_enableValidationLayers)
+		{
+			createInfo.enabledLayerCount = static_cast<uint32_t>(g_validationLayers.size());
+			createInfo.ppEnabledLayerNames = g_validationLayers.data();
+		}
+		else
+		{
+			createInfo.enabledLayerCount = 0;
+		}
 	}
 
 	// General pattern:
@@ -104,6 +118,35 @@ void HelloTriangle::CreateInstance()
 	{
 		throw std::runtime_error("Failed to create Vulkan instance");
 	}
+}
+
+bool HelloTriangle::CheckValidationLayerSupport()
+{
+	uint32_t layerCount;
+	vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+
+	std::vector<VkLayerProperties> availableLayers(layerCount);
+	vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+
+	// Check to make sure the validation layers we want are available.
+	for (auto layerName : g_validationLayers)
+	{
+		bool layerFound = false;
+
+		for (auto& layerProperties : availableLayers)
+		{
+			if (strcmp(layerName, layerProperties.layerName) == 0)
+			{
+				layerFound = true;
+				break;
+			}
+		}
+
+		if (!layerFound)
+			return false;
+	}
+	
+	return true;
 }
 
 void HelloTriangle::MainLoop()

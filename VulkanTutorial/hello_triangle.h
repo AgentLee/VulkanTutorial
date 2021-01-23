@@ -15,12 +15,14 @@ public:
 
 private:
 	void InitWindow();
-	void InitVulkan();
-	void CreateInstance();
 	void MainLoop();
 	void Cleanup();
 
-	VkInstance m_instance;
+	void InitVulkan();
+	void CreateInstance();
+	bool CheckValidationLayerSupport();
 	
+	VkInstance m_instance;
+
 	GLFWwindow* m_window;
 };
