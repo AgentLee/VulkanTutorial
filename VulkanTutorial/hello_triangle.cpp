@@ -51,6 +51,44 @@ void HelloTriangle::CreateInstance()
 		// Interface with GLFW
 		uint32_t glfwExtensionCount = 0;
 		auto glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+		// Check extension support
+		{
+			uint32_t extensionCount = 0;
+			vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+
+			std::vector<VkExtensionProperties> extensions(extensionCount);
+			vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
+
+			std::cout << "Available extensions: " << std::endl;
+			for (auto& extension : extensions)
+			{
+				std::cout << "\t" << extension.extensionName << std::endl;
+			}
+
+			for(uint32_t i = 0; i < glfwExtensionCount; ++i)
+			{
+				auto glfwExtension = glfwExtensions[i];
+
+				bool match = false;
+				for(uint32_t j = 0; j < extensionCount; ++j)
+				{
+					auto extension = extensions[j].extensionName;
+
+					if(strcmp(glfwExtension, extension) == 0)
+					{
+						match = true;
+						break;
+					}
+				}
+
+				if(!match)
+				{
+					throw std::runtime_error("Extensions didn't match");
+				}
+			}
+		}
+
 		
 		createInfo.enabledExtensionCount = glfwExtensionCount;
 		createInfo.ppEnabledExtensionNames = glfwExtensions;
@@ -78,6 +116,8 @@ void HelloTriangle::MainLoop()
 
 void HelloTriangle::Cleanup()
 {
+	vkDestroyInstance(m_instance, nullptr);
+
 	glfwDestroyWindow(m_window);
 	glfwTerminate();
 }
