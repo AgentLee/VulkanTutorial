@@ -21,6 +21,7 @@ private:
 
 	void InitVulkan();
 	void CreateInstance();
+	void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
 	// Need to set up the handle to the debug callback.
 	void SetupDebugMessenger();
 	bool CheckValidationLayerSupport();

@@ -13,6 +13,7 @@ public:
 		const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
 		void* pUserData)
 	{
+		// Add a breakpoint here to see where the errors are coming from.
 		std::cerr << "[Validation Layer] " << pCallbackData->pMessage << std::endl;
 
 		return VK_FALSE;

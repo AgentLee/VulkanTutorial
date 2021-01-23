@@ -48,10 +48,11 @@ void HelloTriangle::CreateInstance()
 		appInfo.apiVersion = VK_API_VERSION_1_0;	// I have 1.2 installed, but stay consistent with tutorial.
 	}
 
-	// Not sure why I have to initialize it out here...
-	// It's like it it copies the address to createInfo rather than the data.
+	// Call outside since I bracketed all the createInfo stuff.
+	// Ensures these don't get destroyed before we actually create the instance.
 	auto requiredExtensions = GetRequiredExtensions();
-	
+	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
+
 	VkInstanceCreateInfo createInfo{};
 	{
 		createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -97,18 +98,21 @@ void HelloTriangle::CreateInstance()
 		
 		createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
 		createInfo.ppEnabledExtensionNames = requiredExtensions.data();
-		
+
 		if (g_enableValidationLayers)
 		{
 			createInfo.enabledLayerCount = static_cast<uint32_t>(g_validationLayers.size());
 			createInfo.ppEnabledLayerNames = g_validationLayers.data();
+
+			PopulateDebugMessengerCreateInfo(debugCreateInfo);
+			createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &debugCreateInfo;
 		}
 		else
 		{
 			createInfo.enabledLayerCount = 0;
 		}
 	}
-
+	
 	// General pattern:
 	// Pointer to creation info
 	// Pointer to custom allocator callbacks (nullptr)
@@ -119,24 +123,30 @@ void HelloTriangle::CreateInstance()
 	}
 }
 
+void HelloTriangle::PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo)
+{
+	createInfo = {};
+	{
+		createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+		// What kind of severities we want.
+		createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+			VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+		// What kind of messages we want.
+		createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+			VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+		// Specify the callback function.
+		createInfo.pfnUserCallback = DebugLayer::DebugCallback;
+		createInfo.pUserData = nullptr;
+	}
+}
+
 void HelloTriangle::SetupDebugMessenger()
 {
 	if (!g_enableValidationLayers)
 		return;
 
 	VkDebugUtilsMessengerCreateInfoEXT createInfo{};
-	{
-		createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-		// What kind of severities we want.
-		createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | 
-			VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-		// What kind of messages we want.
-		createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | 
-			VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-		// Specify the callback function.
-		createInfo.pfnUserCallback = DebugLayer::DebugCallback;
-		createInfo.pUserData = nullptr;
-	}
+	PopulateDebugMessengerCreateInfo(createInfo);
 
 	if (DebugLayer::CreateDebugUtilsMessengerEXT(m_instance, &createInfo, nullptr, &m_debugMessenger) != VK_SUCCESS)
 	{
