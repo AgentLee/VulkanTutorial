@@ -67,6 +67,7 @@ private:
 	VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
 	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
 	void CreateSwapChain();
+	void CreateImageViews();
 	
 private:
 	VkInstance m_instance;
@@ -80,6 +81,7 @@ private:
 	std::vector<VkImage> m_swapChainImages;
 	VkFormat m_swapChainImageFormat;
 	VkExtent2D m_swapChainExtent;
+	std::vector<VkImageView> m_swapChainImageViews;
 	
 	GLFWwindow* m_window;
 };
