@@ -27,6 +27,7 @@ void HelloTriangle::InitWindow()
 void HelloTriangle::InitVulkan()
 {
 	CreateInstance();
+	SetupDebugMessenger();
 }
 
 void HelloTriangle::CreateInstance()
@@ -46,40 +47,39 @@ void HelloTriangle::CreateInstance()
 		appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
 		appInfo.apiVersion = VK_API_VERSION_1_0;	// I have 1.2 installed, but stay consistent with tutorial.
 	}
+
+	// Not sure why I have to initialize it out here...
+	// It's like it it copies the address to createInfo rather than the data.
+	auto requiredExtensions = GetRequiredExtensions();
 	
 	VkInstanceCreateInfo createInfo{};
 	{
 		createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 		createInfo.pApplicationInfo = &appInfo;
 
-		// Interface with GLFW
-		uint32_t glfwExtensionCount = 0;
-		auto glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
 		// Check extension support
 		{
+			// Query for number of extensions.
 			uint32_t extensionCount = 0;
 			vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
 
-			std::vector<VkExtensionProperties> extensions(extensionCount);
-			vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
+			// Get those extensions.
+			std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+			vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
 
 			std::cout << "Available extensions: " << std::endl;
-			for (auto& extension : extensions)
+			for (auto& extension : availableExtensions)
 			{
 				std::cout << "\t" << extension.extensionName << std::endl;
 			}
 
-			for(uint32_t i = 0; i < glfwExtensionCount; ++i)
+			// Try to find all of the required extensions in the available extensions.
+			for (auto& requiredExtension : requiredExtensions)
 			{
-				auto glfwExtension = glfwExtensions[i];
-
 				bool match = false;
-				for(uint32_t j = 0; j < extensionCount; ++j)
+				for (auto& availableExtension : availableExtensions)
 				{
-					auto extension = extensions[j].extensionName;
-
-					if(strcmp(glfwExtension, extension) == 0)
+					if(strcmp(requiredExtension, availableExtension.extensionName) == 0)
 					{
 						match = true;
 						break;
@@ -88,17 +88,16 @@ void HelloTriangle::CreateInstance()
 
 				if(!match)
 				{
-					throw std::runtime_error("Extensions didn't match");
+					throw std::runtime_error("Required extension not available.");
 				}
 			}
+
+			std::cout << std::endl << "Required extensions found." << std::endl;
 		}
-
 		
-		createInfo.enabledExtensionCount = glfwExtensionCount;
-		createInfo.ppEnabledExtensionNames = glfwExtensions;
-
-		createInfo.enabledLayerCount = 0;
-
+		createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
+		createInfo.ppEnabledExtensionNames = requiredExtensions.data();
+		
 		if (g_enableValidationLayers)
 		{
 			createInfo.enabledLayerCount = static_cast<uint32_t>(g_validationLayers.size());
@@ -114,9 +113,34 @@ void HelloTriangle::CreateInstance()
 	// Pointer to creation info
 	// Pointer to custom allocator callbacks (nullptr)
 	// Pointer to variable that stores the object
-	if (vkCreateInstance(&createInfo, nullptr, &m_instance))
+	if (vkCreateInstance(&createInfo, nullptr, &m_instance) != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create Vulkan instance");
+	}
+}
+
+void HelloTriangle::SetupDebugMessenger()
+{
+	if (!g_enableValidationLayers)
+		return;
+
+	VkDebugUtilsMessengerCreateInfoEXT createInfo{};
+	{
+		createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+		// What kind of severities we want.
+		createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | 
+			VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+		// What kind of messages we want.
+		createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | 
+			VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+		// Specify the callback function.
+		createInfo.pfnUserCallback = DebugLayer::DebugCallback;
+		createInfo.pUserData = nullptr;
+	}
+
+	if (DebugLayer::CreateDebugUtilsMessengerEXT(m_instance, &createInfo, nullptr, &m_debugMessenger) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to set up debug messenger");
 	}
 }
 
@@ -149,6 +173,22 @@ bool HelloTriangle::CheckValidationLayerSupport()
 	return true;
 }
 
+std::vector<const char*> HelloTriangle::GetRequiredExtensions()
+{
+	// Interface with GLFW
+	uint32_t glfwExtensionCount = 0;
+	auto glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+	std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+
+	if (g_enableValidationLayers)
+	{
+		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+	}
+
+	return extensions;
+}
+
 void HelloTriangle::MainLoop()
 {
 	while (!glfwWindowShouldClose(m_window))
@@ -159,6 +199,11 @@ void HelloTriangle::MainLoop()
 
 void HelloTriangle::Cleanup()
 {
+	if (g_enableValidationLayers)
+	{
+		DebugLayer::DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
+	}
+	
 	vkDestroyInstance(m_instance, nullptr);
 
 	glfwDestroyWindow(m_window);
