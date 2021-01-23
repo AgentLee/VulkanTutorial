@@ -44,10 +44,14 @@ private:
 	};
 
 	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
+
+	void CreateLogicalDevice();
 	
 	VkInstance m_instance;
 	VkDebugUtilsMessengerEXT m_debugMessenger;
 	VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
+	VkDevice m_device;
+	VkQueue m_graphicsQueue;
 	
 	GLFWwindow* m_window;
 };

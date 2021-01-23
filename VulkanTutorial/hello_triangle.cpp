@@ -31,6 +31,7 @@ void HelloTriangle::InitVulkan()
 	CreateInstance();
 	SetupDebugMessenger();
 	PickPhysicalDevice();
+	CreateLogicalDevice();
 }
 
 void HelloTriangle::CreateInstance()
@@ -323,6 +324,61 @@ HelloTriangle::QueueFamilyIndices HelloTriangle::FindQueueFamilies(VkPhysicalDev
 	return indices;
 }
 
+void HelloTriangle::CreateLogicalDevice()
+{
+	if (m_physicalDevice == VK_NULL_HANDLE)
+	{
+		_ASSERT("Physical device is null");
+	}
+	
+	auto indices = FindQueueFamilies(m_physicalDevice);
+
+	// TODO: Extract all these into their own functions
+	// Describes the number of queues for a single queue family.
+	VkDeviceQueueCreateInfo queueCreateInfo{};
+	float queuePriority = 1;
+	{
+		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
+		queueCreateInfo.queueCount = 1;
+		queueCreateInfo.pQueuePriorities = &queuePriority;
+	}
+
+	// Specify device features
+	VkPhysicalDeviceFeatures deviceFeatures{};
+	{
+		// TODO
+	}
+
+	// Create logical device
+	VkDeviceCreateInfo createInfo{};
+	{
+		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+		createInfo.pQueueCreateInfos = &queueCreateInfo;
+		createInfo.queueCreateInfoCount = 1;
+		createInfo.pEnabledFeatures = &deviceFeatures;
+		createInfo.enabledExtensionCount = 0;
+
+		if (g_enableValidationLayers)
+		{
+			createInfo.enabledLayerCount = static_cast<uint32_t>(g_validationLayers.size());
+			createInfo.ppEnabledLayerNames = g_validationLayers.data();
+		}
+		else
+		{
+			createInfo.enabledLayerCount = 0;
+		}
+	}
+
+	if (vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create logical device");
+	}
+
+	// Assign handle to queue
+	vkGetDeviceQueue(m_device, indices.graphicsFamily.value(), 0, &m_graphicsQueue);
+}
+
 void HelloTriangle::MainLoop()
 {
 	while (!glfwWindowShouldClose(m_window))
@@ -333,6 +389,9 @@ void HelloTriangle::MainLoop()
 
 void HelloTriangle::Cleanup()
 {
+	// Device queues (graphics queue) are implicitly destroyed when the device is destroyed.
+	vkDestroyDevice(m_device, nullptr);
+	
 	if (g_enableValidationLayers)
 	{
 		DebugLayer::DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
