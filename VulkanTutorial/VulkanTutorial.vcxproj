@@ -166,6 +166,12 @@
     <ClInclude Include="constants.h" />
     <ClInclude Include="debug_layer.h" />
     <ClInclude Include="hello_triangle.h" />
+    <ClInclude Include="helpers.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Shaders\compile.bat" />
+    <None Include="Shaders\fs.frag" />
+    <None Include="Shaders\vs.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

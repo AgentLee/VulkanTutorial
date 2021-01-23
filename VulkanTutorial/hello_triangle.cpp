@@ -38,6 +38,7 @@ void HelloTriangle::InitVulkan()
 	CreateLogicalDevice();
 	CreateSwapChain();
 	CreateImageViews();
+	CreateGraphicsPipeline();
 }
 
 void HelloTriangle::CreateInstance()
@@ -643,6 +644,62 @@ void HelloTriangle::CreateImageViews()
 			throw std::runtime_error("Failed to create image view");
 		}
 	}
+}
+
+void HelloTriangle::CreateGraphicsPipeline()
+{
+	// Load shaders
+	auto vsFile = ReadFile("shaders/vert.spv");
+	auto fsFile = ReadFile("shaders/frag.spv");
+
+	// Create modules
+	auto vsModule = CreateShaderModule(vsFile);
+	auto fsModule = CreateShaderModule(fsFile);
+
+	// Create shader stages
+	VkPipelineShaderStageCreateInfo vsStageInfo{};
+	{
+		vsStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		vsStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+		vsStageInfo.module = vsModule;
+		vsStageInfo.pName = "main";	// Specify entry point function
+		//vsStageInfo.pSpecializationInfo	// Specify values for shader constants
+	}
+
+	VkPipelineShaderStageCreateInfo fsStageInfo{};
+	{
+		fsStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		fsStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+		fsStageInfo.module = fsModule;
+		fsStageInfo.pName = "main";	// Specify entry point function
+		//fsStageInfo.pSpecializationInfo	// Specify values for shader constants
+	}
+
+	VkPipelineShaderStageCreateInfo shaderStages[] = { vsStageInfo, fsStageInfo };
+	
+	
+	vkDestroyShaderModule(m_device, vsModule, nullptr);
+	vkDestroyShaderModule(m_device, fsModule, nullptr);
+}
+
+VkShaderModule HelloTriangle::CreateShaderModule(const std::vector<char>& code)
+{
+	// Wraps the code in a VkShaderModule object.
+
+	VkShaderModuleCreateInfo createInfo{};
+	{
+		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+		createInfo.codeSize = code.size();
+		createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+	}
+
+	VkShaderModule shaderModule;
+	if (vkCreateShaderModule(m_device, &createInfo, nullptr, &shaderModule))
+	{
+		throw std::runtime_error("Failed to create shader module");
+	}
+
+	return shaderModule;
 }
 
 void HelloTriangle::MainLoop()

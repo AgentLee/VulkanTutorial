@@ -8,6 +8,7 @@
 #include <optional>
 
 #include "constants.h"
+#include "helpers.h"
 #include "debug_layer.h"
 
 class HelloTriangle
@@ -68,6 +69,9 @@ private:
 	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
 	void CreateSwapChain();
 	void CreateImageViews();
+	
+	void CreateGraphicsPipeline();
+	VkShaderModule CreateShaderModule(const std::vector<char>& code);
 	
 private:
 	VkInstance m_instance;
