@@ -72,6 +72,8 @@ private:
 	
 	void CreateGraphicsPipeline();
 	VkShaderModule CreateShaderModule(const std::vector<char>& code);
+
+	void CreateRenderPass();
 	
 private:
 	VkInstance m_instance;
@@ -87,6 +89,7 @@ private:
 	VkExtent2D m_swapChainExtent;
 	std::vector<VkImageView> m_swapChainImageViews;
 
+	VkRenderPass m_renderPass;
 	VkPipelineLayout m_pipelineLayout;
 	
 	GLFWwindow* m_window;
