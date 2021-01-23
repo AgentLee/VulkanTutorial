@@ -252,7 +252,8 @@ void HelloTriangle::PickPhysicalDevice()
 bool HelloTriangle::IsDeviceCompatible(VkPhysicalDevice device)
 {
 #if 1
-	return true;
+	auto indices = FindQueueFamilies(device);
+	return indices.IsComplete();
 #else
 	VkPhysicalDeviceProperties deviceProperties;
 	vkGetPhysicalDeviceProperties(device, &deviceProperties);
@@ -293,6 +294,33 @@ int HelloTriangle::RateDeviceCompatibility(VkPhysicalDevice device)
 	}
 
 	return score;
+}
+
+HelloTriangle::QueueFamilyIndices HelloTriangle::FindQueueFamilies(VkPhysicalDevice device)
+{
+	QueueFamilyIndices indices;
+
+	uint32_t queueFamilyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+	for (uint32_t i = 0; i < queueFamilyCount; ++i)
+	{
+		auto queueFamily = queueFamilies[i];
+		if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+		{
+			indices.graphicsFamily = i;
+		}
+
+		if (indices.IsComplete())
+		{
+			break;
+		}
+	}
+	
+	return indices;
 }
 
 void HelloTriangle::MainLoop()

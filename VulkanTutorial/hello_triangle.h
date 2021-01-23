@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <cstdlib>
 #include <vector>
+#include <optional>
 
 #include "constants.h"
 #include "debug_layer.h"
@@ -34,6 +35,15 @@ private:
 	void PickPhysicalDevice();
 	bool IsDeviceCompatible(VkPhysicalDevice device);
 	int RateDeviceCompatibility(VkPhysicalDevice device);
+
+	struct QueueFamilyIndices
+	{
+		std::optional<uint32_t> graphicsFamily;
+
+		bool IsComplete() { return graphicsFamily.has_value(); }
+	};
+
+	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
 	
 	VkInstance m_instance;
 	VkDebugUtilsMessengerEXT m_debugMessenger;
