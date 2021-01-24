@@ -13,6 +13,12 @@ void HelloTriangle::Run()
 	Cleanup();
 }
 
+void HelloTriangle::FrameBufferResizeCallback(GLFWwindow* window, int width, int height)
+{
+	auto app = reinterpret_cast<HelloTriangle*>(glfwGetWindowUserPointer(window));
+	app->frameBufferResized = true;
+}
+
 void HelloTriangle::InitWindow()
 {
 	// Initialize GLFW library
@@ -21,12 +27,15 @@ void HelloTriangle::InitWindow()
 	// Disable OpenGL
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-	// Disable resizing
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-
 	// Create window
 	// A cool thing here is that you can specify which monitor to open the window on.
 	m_window = glfwCreateWindow(WIDTH, HEIGHT, "Hello Triangle", nullptr, nullptr);
+
+	// Set pointer to window
+	glfwSetWindowUserPointer(m_window, this);
+	
+	// Detect resizing
+	glfwSetFramebufferSizeCallback(m_window, FrameBufferResizeCallback);
 }
 
 void HelloTriangle::InitVulkan()
@@ -592,6 +601,33 @@ void HelloTriangle::CreateSwapChain()
 	m_swapChainExtent = extent;
 }
 
+void HelloTriangle::RecreateSwapChain()
+{
+	// Pause while the window is minimized.
+	{
+		int width = 0;
+		int height = 0;
+		glfwGetFramebufferSize(m_window, &width, &height);
+
+		while (width == 0 || height == 0)
+		{
+			glfwGetFramebufferSize(m_window, &width, &height);
+			glfwWaitEvents();
+		}
+	}
+	
+	vkDeviceWaitIdle(m_device);
+
+	CleanupSwapChain();
+	
+	CreateSwapChain();
+	CreateImageViews();
+	CreateRenderPass();
+	CreateGraphicsPipeline();
+	CreateFrameBuffers();
+	CreateCommandBuffers();
+}
+
 void HelloTriangle::CreateImageViews()
 {
 	// Describe how to use the image.
@@ -1087,7 +1123,7 @@ void HelloTriangle::CreateSyncObjects()
 	
 	VkSemaphoreCreateInfo semaphoreInfo{};
 	{
-		semaphoreInfo.sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO;
+		semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 	}
 
 	VkFenceCreateInfo fenceInfo{};
@@ -1131,8 +1167,20 @@ void HelloTriangle::DrawFrame()
 	vkWaitForFences(m_device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
 	
 	uint32_t imageIndex;	// Store index of the image from the swap chain.
-	vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX, m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
+	auto acquireResult = vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX, m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
 
+	// If swap chain is out of date or suboptimal, recreate it.
+	if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR || acquireResult == VK_SUBOPTIMAL_KHR)
+	{
+		frameBufferResized = false;
+		RecreateSwapChain();
+		return;
+	}
+	else if (acquireResult != VK_SUCCESS)
+	{
+		ASSERT(false, "Failed to acquire swap chain image");
+	}
+	
 	// Check if previous frame is using this image (waiting on a fence)
 	if (m_imagesInFlight[imageIndex] != VK_NULL_HANDLE)
 	{
@@ -1212,8 +1260,31 @@ void HelloTriangle::DrawFrame()
 	m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
+void HelloTriangle::CleanupSwapChain()
+{
+	for (auto& framebuffer : m_swapChainFrameBuffers)
+	{
+		vkDestroyFramebuffer(m_device, framebuffer, nullptr);
+	}
+
+	vkFreeCommandBuffers(m_device, m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
+
+	vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
+	vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
+	vkDestroyRenderPass(m_device, m_renderPass, nullptr);
+
+	for (auto& imageView : m_swapChainImageViews)
+	{
+		vkDestroyImageView(m_device, imageView, nullptr);
+	}
+
+	vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
+}
+
 void HelloTriangle::Cleanup()
 {
+	CleanupSwapChain();
+	
 	for(auto i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 	{
 		vkDestroySemaphore(m_device, m_imageAvailableSemaphores[i], nullptr);
@@ -1222,22 +1293,6 @@ void HelloTriangle::Cleanup()
 	}
 	
 	vkDestroyCommandPool(m_device, m_commandPool, nullptr);
-	
-	for (auto& framebuffer : m_swapChainFrameBuffers)
-	{
-		vkDestroyFramebuffer(m_device, framebuffer, nullptr);
-	}
-	
-	vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
-	vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
-	vkDestroyRenderPass(m_device, m_renderPass, nullptr);
-	
-	for(auto imageView : m_swapChainImageViews)
-	{
-		vkDestroyImageView(m_device, imageView, nullptr);
-	}
-	
-	vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
 	
 	// Device queues (graphics queue) are implicitly destroyed when the device is destroyed.
 	vkDestroyDevice(m_device, nullptr);

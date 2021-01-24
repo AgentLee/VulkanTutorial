@@ -15,6 +15,9 @@ class HelloTriangle
 {
 public:
 	void Run();
+
+	// This needs to be static because GLFW doesn't know how to call it from a this pointer.
+	static void FrameBufferResizeCallback(GLFWwindow* window, int width, int height);
 	
 private:
 	void InitWindow();
@@ -69,6 +72,8 @@ private:
 	VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
 	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
 	void CreateSwapChain();
+	void RecreateSwapChain();
+	void CleanupSwapChain();
 	void CreateImageViews();
 	
 	void CreateGraphicsPipeline();
@@ -115,6 +120,8 @@ private:
 	std::vector<VkFence> m_imagesInFlight;
 	
 	size_t m_currentFrame = 0;
+
+	bool frameBufferResized = false;
 	
 	GLFWwindow* m_window;
 };
