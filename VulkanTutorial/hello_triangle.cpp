@@ -52,6 +52,7 @@ void HelloTriangle::InitVulkan()
 	CreateFrameBuffers();
 	CreateCommandPool();
 	CreateVertexBuffer();
+	CreateIndexBuffer();
 	CreateCommandBuffers();
 	CreateSyncObjects();
 }
@@ -1158,6 +1159,46 @@ void HelloTriangle::CreateVertexBuffer()
 	}
 }
 
+void HelloTriangle::CreateIndexBuffer()
+{
+	VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+	// Create a temporary buffer -----
+	// Use the staging buffer to map and copy index data.
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+
+	// VK_BUFFER_USAGE_TRANSFER_SRC_BIT - Use this buffer as the source in transferring memory.
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+	// Fill the index buffer -----
+	void* data;
+	{
+		// Map buffer memory into CPU accessible memory.
+		VK_ASSERT(vkMapMemory(m_device, stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map data to index buffer");
+
+		// Copy data over
+		memcpy(data, indices.data(), (size_t)bufferSize);
+
+		// Unmap
+		vkUnmapMemory(m_device, stagingBufferMemory);
+	}
+
+	// VK_BUFFER_USAGE_TRANSFER_DST_BIT - Use this buffer as the destination in transferring memory.
+	// VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT - The most optimal use of memory. We need to use a staging buffer for this since it's not directly accessible with CPU.
+	// The vertex buffer is device local. This means that we can't map memory directly to it but we can copy data from another buffer over.
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_indexBuffer, m_indexBufferMemory);
+
+	// Copy from stage to vertex buffer
+	CopyBuffer(stagingBuffer, m_indexBuffer, bufferSize);
+
+	// Destroy staging buffer
+	{
+		vkDestroyBuffer(m_device, stagingBuffer, nullptr);
+		vkFreeMemory(m_device, stagingBufferMemory, nullptr);
+	}
+}
+
 uint32_t HelloTriangle::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
 {
 	// Query the types of memory
@@ -1239,8 +1280,11 @@ void HelloTriangle::CreateCommandBuffers()
 		VkDeviceSize offsets[] = { 0 };
 		vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
 
-		vkCmdDraw(m_commandBuffers[i], 3, 1, 0, 0);
-
+		// Bind index buffer
+		vkCmdBindIndexBuffer(m_commandBuffers[i], m_indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+		
+		vkCmdDrawIndexed(m_commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+		
 		// End render pass
 		vkCmdEndRenderPass(m_commandBuffers[i]);
 
@@ -1422,6 +1466,9 @@ void HelloTriangle::Cleanup()
 
 	vkDestroyBuffer(m_device, m_vertexBuffer, nullptr);
 	vkFreeMemory(m_device, m_vertexBufferMemory, nullptr);
+
+	vkDestroyBuffer(m_device, m_indexBuffer, nullptr);
+	vkFreeMemory(m_device, m_indexBufferMemory, nullptr);
 	
 	for(auto i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 	{
