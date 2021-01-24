@@ -32,15 +32,29 @@ static std::vector<char> ReadFile(const std::string& filename)
 
 //https://stackoverflow.com/questions/3767869/adding-message-to-assert
 // TODO: Fix so that intellisense can still work filling out a function in the condition.
+// Actually not a fan of the way this assert works.
 #ifndef NDEBUG
 #define ASSERT(condition, message) \
     do { \
         if (! (condition)) { \
             std::cerr << "Assertion `" #condition "` failed in " << __FILE__ \
                       << " line " << __LINE__ << ": " << message << std::endl; \
-            exit(1); \
+            _ASSERT(false); \
         } \
     } while (false)
 #else
 #   define ASSERT(condition, message) do { } while (false)
+#endif
+
+#ifndef NDEBUG
+#define VK_ASSERT(condition, message) \
+    do { \
+        if (condition != VK_SUCCESS) { \
+            std::cerr << "Assertion `" #condition "` failed in " << __FILE__ \
+                      << " line " << __LINE__ << ": " << message << std::endl; \
+            _ASSERT(false); \
+		} \
+    } while (false)
+#else
+#   define VK_ASSERT(condition, message) do { } while (false)
 #endif

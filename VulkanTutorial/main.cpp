@@ -4,6 +4,8 @@ int main()
 {
 	HelloTriangle app;
 
+	std::cout << "Revving up the N-Gin.." << std::endl;
+	
 	try
 	{
 		app.Run();

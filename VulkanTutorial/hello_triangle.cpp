@@ -94,32 +94,8 @@ void HelloTriangle::CreateInstance()
 			std::vector<VkExtensionProperties> availableExtensions(extensionCount);
 			vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
 
-			std::cout << "Available extensions: " << std::endl;
-			for (auto& extension : availableExtensions)
-			{
-				std::cout << "\t" << extension.extensionName << std::endl;
-			}
-
-			// Try to find all of the required extensions in the available extensions.
-			for (auto& requiredExtension : requiredExtensions)
-			{
-				bool match = false;
-				for (auto& availableExtension : availableExtensions)
-				{
-					if(strcmp(requiredExtension, availableExtension.extensionName) == 0)
-					{
-						match = true;
-						break;
-					}
-				}
-
-				if(!match)
-				{
-					throw std::runtime_error("Required extension not available.");
-				}
-			}
-
-			std::cout << std::endl << "Required extensions found." << std::endl;
+			// Check for availability.
+			DebugLayer::CheckExtensions(requiredExtensions, availableExtensions);
 		}
 		
 		createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
@@ -143,7 +119,7 @@ void HelloTriangle::CreateInstance()
 	// Pointer to creation info
 	// Pointer to custom allocator callbacks (nullptr)
 	// Pointer to variable that stores the object
-	ASSERT(vkCreateInstance(&createInfo, nullptr, &m_instance) == VK_SUCCESS, "Failed to create Vulkan instance");
+	VK_ASSERT(vkCreateInstance(&createInfo, nullptr, &m_instance), "Failed to create Vulkan instance");
 }
 
 void HelloTriangle::PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo)
@@ -171,7 +147,7 @@ void HelloTriangle::SetupDebugMessenger()
 	VkDebugUtilsMessengerCreateInfoEXT createInfo{};
 	PopulateDebugMessengerCreateInfo(createInfo);
 
-	ASSERT(DebugLayer::CreateDebugUtilsMessengerEXT(m_instance, &createInfo, nullptr, &m_debugMessenger) == VK_SUCCESS, "Failed to set up debug messenger");
+	VK_ASSERT(DebugLayer::CreateDebugUtilsMessengerEXT(m_instance, &createInfo, nullptr, &m_debugMessenger), "Failed to set up debug messenger");
 }
 
 bool HelloTriangle::CheckValidationLayerSupport()
@@ -430,7 +406,7 @@ void HelloTriangle::CreateLogicalDevice()
 		}
 	}
 
-	ASSERT(vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device) == VK_SUCCESS, "Failed to create logical device");
+	VK_ASSERT(vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device), "Failed to create logical device");
 
 	// Assign handles to queue
 	vkGetDeviceQueue(m_device, indices.graphicsFamily.value(), 0, &m_graphicsQueue);
@@ -439,7 +415,7 @@ void HelloTriangle::CreateLogicalDevice()
 
 void HelloTriangle::CreateSurface()
 {
-	ASSERT(glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface) == VK_SUCCESS, "Failed to create window surface");
+	VK_ASSERT(glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface), "Failed to create window surface");
 }
 
 HelloTriangle::SwapChainSupportDetails HelloTriangle::QuerySwapChainSupport(VkPhysicalDevice device)
@@ -591,7 +567,7 @@ void HelloTriangle::CreateSwapChain()
 		createInfo.oldSwapchain = VK_NULL_HANDLE;
 	}
 	
-	ASSERT(vkCreateSwapchainKHR(m_device, &createInfo, nullptr, &m_swapChain) == VK_SUCCESS, "Failed to create swap chain");
+	VK_ASSERT(vkCreateSwapchainKHR(m_device, &createInfo, nullptr, &m_swapChain), "Failed to create swap chain");
 
 	// Get handles to the swap chain images.
 	vkGetSwapchainImagesKHR(m_device, m_swapChain, &imageCount, nullptr);
@@ -666,7 +642,7 @@ void HelloTriangle::CreateImageViews()
 			}
 		}
 
-		ASSERT(vkCreateImageView(m_device, &createInfo, nullptr, &m_swapChainImageViews[i]) == VK_SUCCESS, "Failed to create image view");
+		VK_ASSERT(vkCreateImageView(m_device, &createInfo, nullptr, &m_swapChainImageViews[i]), "Failed to create image view");
 	}
 }
 
@@ -858,7 +834,7 @@ void HelloTriangle::CreateGraphicsPipeline()
 		pipelineLayoutInfo.pPushConstantRanges = nullptr;
 	}
 
-	ASSERT(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout) == VK_SUCCESS, "Failed to create pipeline layout");
+	VK_ASSERT(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout), "Failed to create pipeline layout");
 
 	// Create graphics pipeline
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
@@ -893,7 +869,7 @@ void HelloTriangle::CreateGraphicsPipeline()
 		}
 	}
 
-	ASSERT(vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_graphicsPipeline) == VK_SUCCESS, "Failed to create a graphics pipeline");
+	VK_ASSERT(vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_graphicsPipeline), "Failed to create a graphics pipeline");
 	
 	vkDestroyShaderModule(m_device, vsModule, nullptr);
 	vkDestroyShaderModule(m_device, fsModule, nullptr);
@@ -1005,7 +981,7 @@ void HelloTriangle::CreateRenderPass()
 		renderPassInfo.pDependencies = &dependency;
 	}
 
-	ASSERT(vkCreateRenderPass(m_device, &renderPassInfo, nullptr, &m_renderPass) == VK_SUCCESS, "Failed to create render pass");
+	VK_ASSERT(vkCreateRenderPass(m_device, &renderPassInfo, nullptr, &m_renderPass), "Failed to create render pass");
 }
 
 void HelloTriangle::CreateFrameBuffers()
@@ -1035,7 +1011,7 @@ void HelloTriangle::CreateFrameBuffers()
 			frameBufferInfo.layers = 1;
 		}
 
-		ASSERT(vkCreateFramebuffer(m_device, &frameBufferInfo, nullptr, &m_swapChainFrameBuffers[i]) == VK_SUCCESS, "Failed to create frame buffer");
+		VK_ASSERT(vkCreateFramebuffer(m_device, &frameBufferInfo, nullptr, &m_swapChainFrameBuffers[i]), "Failed to create frame buffer");
 	}
 }
 
@@ -1050,13 +1026,12 @@ void HelloTriangle::CreateCommandPool()
 		poolInfo.flags = 0;
 	}
 
-	ASSERT(vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_commandPool) == VK_SUCCESS, "Failed to create command pool");
+	VK_ASSERT(vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_commandPool), "Failed to create command pool");
 }
 
 void HelloTriangle::CreateVertexBuffer()
 {
 	// Create a buffer for CPU to store data in for the GPU to read -----
-
 	VkBufferCreateInfo bufferInfo{};
 	{
 		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1064,39 +1039,38 @@ void HelloTriangle::CreateVertexBuffer()
 		bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 		// Buffers can be owned by specific queue families or shared between multiple families.
 		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;	// We are using this buffer from the graphics queue.
+
+		VK_ASSERT(vkCreateBuffer(m_device, &bufferInfo, nullptr, &m_vertexBuffer), "Failed to create vertex buffer");
 	}
-
-	ASSERT(vkCreateBuffer(m_device, &bufferInfo, nullptr, &m_vertexBuffer) == VK_SUCCESS, "Failed to create vertex buffer");
-
-	// Figure out how much memory we need to load -----
-
-	VkMemoryRequirements memoryRequirements;
-	vkGetBufferMemoryRequirements(m_device, m_vertexBuffer, &memoryRequirements);
 
 	// Memory allocation -----
-
+	// Figure out how much memory we need to load
 	VkMemoryAllocateInfo allocInfo{};
 	{
+		VkMemoryRequirements memoryRequirements;
+		vkGetBufferMemoryRequirements(m_device, m_vertexBuffer, &memoryRequirements);
+		
 		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocInfo.allocationSize = memoryRequirements.size;
+		// FINDING THE RIGHT MEMORY TYPE IS VERY VERY VERY IMPORTANT TO MAP BUFFERS.
 		allocInfo.memoryTypeIndex = FindMemoryType(memoryRequirements.memoryTypeBits, 
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-	}
 
-	// Store handle to memory
-	ASSERT(vkAllocateMemory(m_device, &allocInfo, nullptr, &m_vertexBufferMemory) == VK_SUCCESS, "Failed to allocate vertex buffer memory");
+		// Store handle to memory
+		VK_ASSERT(vkAllocateMemory(m_device, &allocInfo, nullptr, &m_vertexBufferMemory), "Failed to allocate vertex buffer memory");
+	}
 	
-	// Bind the buffer memory
+	// Bind the buffer memory -----
 	// We're allocating specifically for this vertex buffer, no offset.
 	// Offset has to be divisible by memoryRequirements.alignment otherwise.
-	auto buffMemRes = vkBindBufferMemory(m_device, m_vertexBuffer, m_vertexBufferMemory, 0);
+	VK_ASSERT(vkBindBufferMemory(m_device, m_vertexBuffer, m_vertexBufferMemory, 0), "Failed to bind vertex buffer");
 
 	// Fill the vertex buffer -----
 	{
 		void* data;
 		
 		// Map buffer memory into CPU accessible memory.
-		auto result = vkMapMemory(m_device, m_vertexBufferMemory, 0, bufferInfo.size, 0, &data);
+		VK_ASSERT(vkMapMemory(m_device, m_vertexBufferMemory, 0, bufferInfo.size, 0, &data), "Failed to map data to vertex buffer");
 		
 		// Copy data over
 		memcpy(data, vertices.data(), vertices.size() * sizeof(Vertex));
@@ -1123,6 +1097,8 @@ uint32_t HelloTriangle::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlag
 	}
 
 	ASSERT(false, "Failed to find suitable memory type");
+
+	return -1;
 }
 
 void HelloTriangle::CreateCommandBuffers()
@@ -1138,9 +1114,9 @@ void HelloTriangle::CreateCommandBuffers()
 		allocInfo.commandPool = m_commandPool;
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;	// Submit to queue for execution but cannot be called from other command buffers (secondary).
 		allocInfo.commandBufferCount = (uint32_t)m_commandBuffers.size();
-	}
 
-	ASSERT(vkAllocateCommandBuffers(m_device, &allocInfo, m_commandBuffers.data()) == VK_SUCCESS, "Failed to allocate command buffers");
+		VK_ASSERT(vkAllocateCommandBuffers(m_device, &allocInfo, m_commandBuffers.data()), "Failed to allocate command buffers");
+	}
 
 	// Starting command buffer recording
 	for (auto i = 0; i < m_commandBuffers.size(); ++i)
@@ -1153,7 +1129,7 @@ void HelloTriangle::CreateCommandBuffers()
 			beginInfo.pInheritanceInfo = nullptr;	// Only relevant for secondary command buffers - which state to inherit from primary buffer.
 		}
 
-		ASSERT(vkBeginCommandBuffer(m_commandBuffers[i], &beginInfo) == VK_SUCCESS, "Failed to begin recording command buffer");
+		VK_ASSERT(vkBeginCommandBuffer(m_commandBuffers[i], &beginInfo), "Failed to begin recording command buffer");
 
 		// Starting a render pass
 		VkClearValue clearColor = { 0, 0, 0, 1 };
@@ -1190,16 +1166,19 @@ void HelloTriangle::CreateCommandBuffers()
 		// End render pass
 		vkCmdEndRenderPass(m_commandBuffers[i]);
 
-		ASSERT(vkEndCommandBuffer(m_commandBuffers[i]) == VK_SUCCESS, "Failed to record command buffer");
+		VK_ASSERT(vkEndCommandBuffer(m_commandBuffers[i]), "Failed to record command buffer");
 	}
 }
 
 void HelloTriangle::CreateSyncObjects()
 {
-	m_imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-	m_renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-	m_inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-	m_imagesInFlight.resize(m_swapChainImages.size(), VK_NULL_HANDLE);
+	// Resize sync objects.
+	{
+		m_imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+		m_renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+		m_inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+		m_imagesInFlight.resize(m_swapChainImages.size(), VK_NULL_HANDLE);
+	}
 	
 	VkSemaphoreCreateInfo semaphoreInfo{};
 	{
@@ -1214,11 +1193,9 @@ void HelloTriangle::CreateSyncObjects()
 	
 	for (auto i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 	{
-		auto imgAvailableSemRes = vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]);
-		auto renderFinishedSemRes = vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]);
-		auto fenceResult = vkCreateFence(m_device, &fenceInfo, nullptr, &m_inFlightFences[i]);
-		
-		ASSERT(imgAvailableSemRes == VK_SUCCESS && renderFinishedSemRes == VK_SUCCESS && fenceResult == VK_SUCCESS, "Failed to create sync objects");
+		VK_ASSERT(vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]), "Failed to create semaphore");
+		VK_ASSERT(vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]), "Failed to create semaphore");
+		VK_ASSERT(vkCreateFence(m_device, &fenceInfo, nullptr, &m_inFlightFences[i]), "Failed to create fence");
 	}
 }
 
@@ -1304,7 +1281,7 @@ void HelloTriangle::DrawFrame()
 
 		vkResetFences(m_device, 1, &m_inFlightFences[m_currentFrame]);
 		
-		ASSERT(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[m_currentFrame]) == VK_SUCCESS, "Failed to submit draw command buffer");
+		VK_ASSERT(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[m_currentFrame]), "Failed to submit draw command buffer");
 	}
 
 	// Present
