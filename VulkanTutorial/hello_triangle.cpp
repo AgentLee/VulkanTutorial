@@ -51,6 +51,7 @@ void HelloTriangle::InitVulkan()
 	CreateGraphicsPipeline();
 	CreateFrameBuffers();
 	CreateCommandPool();
+	CreateVertexBuffer();
 	CreateCommandBuffers();
 	CreateSyncObjects();
 }
@@ -70,7 +71,7 @@ void HelloTriangle::CreateInstance()
 		appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 		appInfo.pEngineName = "N-Gin";
 		appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-		appInfo.apiVersion = VK_API_VERSION_1_0;	// I have 1.2 installed, but stay consistent with tutorial.
+		appInfo.apiVersion = VK_API_VERSION_1_2;	// I have 1.2 installed, but stay consistent with tutorial.
 	}
 
 	// Call outside since I bracketed all the createInfo stuff.
@@ -702,15 +703,17 @@ void HelloTriangle::CreateGraphicsPipeline()
 	
 	// Describe the vertex data being passed to the shader
 	// Bindings - spacing between data and whether the data is per vertex or per instance
+	auto bindingDescription = Vertex::GetBindingDescription();
 	// Attribute descriptions - the type of data being passed in and how to load them
+	auto attributeDescription = Vertex::GetAttributeDescriptions();
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	{
 		// We have no vertex data to pass to the shader so we don't really need to do anything else here.
 		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-		vertexInputInfo.vertexAttributeDescriptionCount = 0;
-		vertexInputInfo.pVertexBindingDescriptions = nullptr;
-		vertexInputInfo.vertexAttributeDescriptionCount = 0;
-		vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+		vertexInputInfo.vertexBindingDescriptionCount = 1;
+		vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+		vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescription.size());
+		vertexInputInfo.pVertexAttributeDescriptions = attributeDescription.data();
 	}
 
 	// Input assembly
@@ -1050,6 +1053,78 @@ void HelloTriangle::CreateCommandPool()
 	ASSERT(vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_commandPool) == VK_SUCCESS, "Failed to create command pool");
 }
 
+void HelloTriangle::CreateVertexBuffer()
+{
+	// Create a buffer for CPU to store data in for the GPU to read -----
+
+	VkBufferCreateInfo bufferInfo{};
+	{
+		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		bufferInfo.size = sizeof(vertices[0]) * vertices.size();
+		bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+		// Buffers can be owned by specific queue families or shared between multiple families.
+		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;	// We are using this buffer from the graphics queue.
+	}
+
+	ASSERT(vkCreateBuffer(m_device, &bufferInfo, nullptr, &m_vertexBuffer) == VK_SUCCESS, "Failed to create vertex buffer");
+
+	// Figure out how much memory we need to load -----
+
+	VkMemoryRequirements memoryRequirements;
+	vkGetBufferMemoryRequirements(m_device, m_vertexBuffer, &memoryRequirements);
+
+	// Memory allocation -----
+
+	VkMemoryAllocateInfo allocInfo{};
+	{
+		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocInfo.allocationSize = memoryRequirements.size;
+		allocInfo.memoryTypeIndex = FindMemoryType(memoryRequirements.memoryTypeBits, 
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	}
+
+	// Store handle to memory
+	ASSERT(vkAllocateMemory(m_device, &allocInfo, nullptr, &m_vertexBufferMemory) == VK_SUCCESS, "Failed to allocate vertex buffer memory");
+	
+	// Bind the buffer memory
+	// We're allocating specifically for this vertex buffer, no offset.
+	// Offset has to be divisible by memoryRequirements.alignment otherwise.
+	auto buffMemRes = vkBindBufferMemory(m_device, m_vertexBuffer, m_vertexBufferMemory, 0);
+
+	// Fill the vertex buffer -----
+	{
+		void* data;
+		
+		// Map buffer memory into CPU accessible memory.
+		auto result = vkMapMemory(m_device, m_vertexBufferMemory, 0, bufferInfo.size, 0, &data);
+		
+		// Copy data over
+		memcpy(data, vertices.data(), vertices.size() * sizeof(Vertex));
+		
+		// Unmap
+		vkUnmapMemory(m_device, m_vertexBufferMemory);
+	}
+}
+
+uint32_t HelloTriangle::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+{
+	// Query the types of memory
+
+	VkPhysicalDeviceMemoryProperties memoryProperties;
+	vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memoryProperties);
+
+	// Find the memory type that is suitable with the buffer and make sure it has the properties to do so.
+	for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i)
+	{
+		if(typeFilter & (1 << i) && (memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
+		{
+			return i;
+		}
+	}
+
+	ASSERT(false, "Failed to find suitable memory type");
+}
+
 void HelloTriangle::CreateCommandBuffers()
 {
 	// We need to allocate command buffers to be able write commands.
@@ -1104,6 +1179,11 @@ void HelloTriangle::CreateCommandBuffers()
 							VK_PIPELINE_BIND_POINT_GRAPHICS,	// Graphics or compute pipeline	
 							m_graphicsPipeline
 		);
+
+		// Bind vertex buffer
+		VkBuffer vertexBuffers[] = { m_vertexBuffer };
+		VkDeviceSize offsets[] = { 0 };
+		vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
 
 		vkCmdDraw(m_commandBuffers[i], 3, 1, 0, 0);
 
@@ -1284,6 +1364,9 @@ void HelloTriangle::CleanupSwapChain()
 void HelloTriangle::Cleanup()
 {
 	CleanupSwapChain();
+
+	vkDestroyBuffer(m_device, m_vertexBuffer, nullptr);
+	vkFreeMemory(m_device, m_vertexBufferMemory, nullptr);
 	
 	for(auto i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 	{
