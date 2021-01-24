@@ -1029,54 +1029,132 @@ void HelloTriangle::CreateCommandPool()
 	VK_ASSERT(vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_commandPool), "Failed to create command pool");
 }
 
-void HelloTriangle::CreateVertexBuffer()
+void HelloTriangle::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& memory)
 {
 	// Create a buffer for CPU to store data in for the GPU to read -----
 	VkBufferCreateInfo bufferInfo{};
 	{
 		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		bufferInfo.size = sizeof(vertices[0]) * vertices.size();
-		bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+		bufferInfo.size = size;
+		bufferInfo.usage = usage;
 		// Buffers can be owned by specific queue families or shared between multiple families.
 		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;	// We are using this buffer from the graphics queue.
 
-		VK_ASSERT(vkCreateBuffer(m_device, &bufferInfo, nullptr, &m_vertexBuffer), "Failed to create vertex buffer");
+		VK_ASSERT(vkCreateBuffer(m_device, &bufferInfo, nullptr, &buffer), "Failed to create vertex buffer");
 	}
 
+	// Figure out how much memory we need to load -----
+	VkMemoryRequirements memoryRequirements;
+	{
+		vkGetBufferMemoryRequirements(m_device, buffer, &memoryRequirements);
+	}
+	
 	// Memory allocation -----
-	// Figure out how much memory we need to load
 	VkMemoryAllocateInfo allocInfo{};
 	{
-		VkMemoryRequirements memoryRequirements;
-		vkGetBufferMemoryRequirements(m_device, m_vertexBuffer, &memoryRequirements);
-		
 		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocInfo.allocationSize = memoryRequirements.size;
 		// FINDING THE RIGHT MEMORY TYPE IS VERY VERY VERY IMPORTANT TO MAP BUFFERS.
-		allocInfo.memoryTypeIndex = FindMemoryType(memoryRequirements.memoryTypeBits, 
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		allocInfo.memoryTypeIndex = FindMemoryType(memoryRequirements.memoryTypeBits, properties);
 
 		// Store handle to memory
-		VK_ASSERT(vkAllocateMemory(m_device, &allocInfo, nullptr, &m_vertexBufferMemory), "Failed to allocate vertex buffer memory");
+		VK_ASSERT(vkAllocateMemory(m_device, &allocInfo, nullptr, &memory), "Failed to allocate vertex buffer memory");
 	}
-	
+
 	// Bind the buffer memory -----
 	// We're allocating specifically for this vertex buffer, no offset.
 	// Offset has to be divisible by memoryRequirements.alignment otherwise.
-	VK_ASSERT(vkBindBufferMemory(m_device, m_vertexBuffer, m_vertexBufferMemory, 0), "Failed to bind vertex buffer");
+	VK_ASSERT(vkBindBufferMemory(m_device, buffer, memory, 0), "Failed to bind vertex buffer");
+}
 
-	// Fill the vertex buffer -----
+// Copy from srcBuffer to dstBuffer.
+void HelloTriangle::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
+{
+	// Transfer operations are done through command buffers.
+	// This can be a temporary command buffer or through the command pool.
+	
+	VkCommandBufferAllocateInfo allocInfo{};
 	{
-		void* data;
-		
+		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		allocInfo.commandPool = m_commandPool;
+		allocInfo.commandBufferCount = 1;
+	}
+
+	VkCommandBuffer commandBuffer;
+	VK_ASSERT(vkAllocateCommandBuffers(m_device, &allocInfo, &commandBuffer), "Failed to allocate command buffer");
+
+	// Start recording the command buffer
+	VkCommandBufferBeginInfo beginInfo{};
+	{
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;	// We're only using the command buffer once.
+	}
+	VK_ASSERT(vkBeginCommandBuffer(commandBuffer, &beginInfo), "Couldn't begin recording command buffer");
+
+	VkBufferCopy copyRegion{};
+	{
+		copyRegion.srcOffset = 0;
+		copyRegion.dstOffset = 0;
+		copyRegion.size = size;
+	}
+	vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+
+	// Stop recording since we already recorded the copy command.
+	vkEndCommandBuffer(commandBuffer);
+
+	// Execute the command buffer
+	VkSubmitInfo submitInfo{};
+	{
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &commandBuffer;
+	}
+	vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+
+	// Wait for the transfer to finish.
+	vkQueueWaitIdle(m_graphicsQueue);
+	
+	vkFreeCommandBuffers(m_device, m_commandPool, 1, &commandBuffer);
+}
+
+void HelloTriangle::CreateVertexBuffer()
+{
+	auto bufferSize = sizeof(Vertex) * vertices.size();
+
+	// Create a temporary buffer -----
+	// Use the staging buffer to map and copy vertex data.
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+	
+	// VK_BUFFER_USAGE_TRANSFER_SRC_BIT - Use this buffer as the source in transferring memory.
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+	
+	// Fill the vertex buffer -----
+	void* data;
+	{
 		// Map buffer memory into CPU accessible memory.
-		VK_ASSERT(vkMapMemory(m_device, m_vertexBufferMemory, 0, bufferInfo.size, 0, &data), "Failed to map data to vertex buffer");
+		VK_ASSERT(vkMapMemory(m_device, stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map data to vertex buffer");
 		
 		// Copy data over
-		memcpy(data, vertices.data(), vertices.size() * sizeof(Vertex));
+		memcpy(data, vertices.data(), (size_t)bufferSize);
 		
 		// Unmap
-		vkUnmapMemory(m_device, m_vertexBufferMemory);
+		vkUnmapMemory(m_device, stagingBufferMemory);
+	}
+
+	// VK_BUFFER_USAGE_TRANSFER_DST_BIT - Use this buffer as the destination in transferring memory.
+	// VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT - The most optimal use of memory. We need to use a staging buffer for this since it's not directly accessible with CPU.
+	// The vertex buffer is device local. This means that we can't map memory directly to it but we can copy data from another buffer over.
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_vertexBuffer, m_vertexBufferMemory);
+
+	// Copy from stage to vertex buffer
+	CopyBuffer(stagingBuffer, m_vertexBuffer, bufferSize);
+
+	// Destroy staging buffer
+	{
+		vkDestroyBuffer(m_device, stagingBuffer, nullptr);
+		vkFreeMemory(m_device, stagingBufferMemory, nullptr);
 	}
 }
 
