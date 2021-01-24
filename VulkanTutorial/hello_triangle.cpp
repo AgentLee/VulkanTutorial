@@ -966,6 +966,40 @@ void HelloTriangle::CreateRenderPass()
 	}
 }
 
+void HelloTriangle::CreateFrameBuffers()
+{
+	// Each FBO will need to reference each of the image view objects.
+
+	m_swapChainFrameBuffers.resize(m_swapChainImageViews.size());
+
+	// Iterate over all of the views to create a frame buffer for them.
+	for (auto i = 0; i < m_swapChainImageViews.size(); ++i)
+	{
+		VkImageView attachments[] = {
+			m_swapChainImageViews[i],
+		};
+
+		// Frame buffers can only be used with compatible render passes.
+		// They roughly have the same attachments.
+		
+		VkFramebufferCreateInfo frameBufferInfo{};
+		{
+			frameBufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			frameBufferInfo.renderPass = m_renderPass;
+			frameBufferInfo.attachmentCount = 1;
+			frameBufferInfo.pAttachments = attachments;
+			frameBufferInfo.width = m_swapChainExtent.width;
+			frameBufferInfo.height = m_swapChainExtent.height;
+			frameBufferInfo.layers = 1;
+		}
+
+		if (vkCreateFramebuffer(m_device, &frameBufferInfo, nullptr, &m_swapChainFrameBuffers[i]) != VK_SUCCESS) 
+		{
+			throw std::runtime_error("Failed to create frame buffer");
+		}
+	}
+}
+
 void HelloTriangle::MainLoop()
 {
 	while (!glfwWindowShouldClose(m_window))
@@ -976,6 +1010,11 @@ void HelloTriangle::MainLoop()
 
 void HelloTriangle::Cleanup()
 {
+	for (auto& framebuffer : m_swapChainFrameBuffers)
+	{
+		vkDestroyFramebuffer(m_device, framebuffer, nullptr);
+	}
+	
 	vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
 	vkDestroyRenderPass(m_device, m_renderPass, nullptr);

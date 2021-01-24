@@ -74,6 +74,8 @@ private:
 	VkShaderModule CreateShaderModule(const std::vector<char>& code);
 
 	void CreateRenderPass();
+
+	void CreateFrameBuffers();
 	
 private:
 	VkInstance m_instance;
@@ -88,7 +90,8 @@ private:
 	VkFormat m_swapChainImageFormat;
 	VkExtent2D m_swapChainExtent;
 	std::vector<VkImageView> m_swapChainImageViews;
-
+	std::vector<VkFramebuffer> m_swapChainFrameBuffers;
+	
 	VkRenderPass m_renderPass;
 	VkPipelineLayout m_pipelineLayout;
 	VkPipeline m_graphicsPipeline;
