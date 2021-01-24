@@ -31,6 +31,7 @@ static std::vector<char> ReadFile(const std::string& filename)
 }
 
 //https://stackoverflow.com/questions/3767869/adding-message-to-assert
+// TODO: Fix so that intellisense can still work filling out a function in the condition.
 #ifndef NDEBUG
 #define ASSERT(condition, message) \
     do { \

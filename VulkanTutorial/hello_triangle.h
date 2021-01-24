@@ -78,6 +78,7 @@ private:
 	void CreateFrameBuffers();
 
 	void CreateCommandPool();
+	void CreateCommandBuffers();
 	
 private:
 	VkInstance m_instance;
@@ -102,6 +103,7 @@ private:
 	// Write all the ops you want into the command buffer then
 	// tell Vulkan which commands to execute.
 	VkCommandPool m_commandPool;
+	std::vector<VkCommandBuffer> m_commandBuffers;
 
 	GLFWwindow* m_window;
 };

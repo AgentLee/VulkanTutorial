@@ -42,6 +42,7 @@ void HelloTriangle::InitVulkan()
 	CreateGraphicsPipeline();
 	CreateFrameBuffers();
 	CreateCommandPool();
+	CreateCommandBuffers();
 }
 
 void HelloTriangle::CreateInstance()
@@ -984,6 +985,70 @@ void HelloTriangle::CreateCommandPool()
 	}
 
 	ASSERT(vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_commandPool) == VK_SUCCESS, "Failed to create command pool");
+}
+
+void HelloTriangle::CreateCommandBuffers()
+{
+	// We need to allocate command buffers to be able write commands.
+	// Each image in the swap chain needs to have a command buffer written to.
+	
+	m_commandBuffers.resize(m_swapChainFrameBuffers.size());
+
+	VkCommandBufferAllocateInfo allocInfo{};
+	{
+		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		allocInfo.commandPool = m_commandPool;
+		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;	// Submit to queue for execution but cannot be called from other command buffers (secondary).
+		allocInfo.commandBufferCount = (uint32_t)m_commandBuffers.size();
+	}
+
+	ASSERT(vkAllocateCommandBuffers(m_device, &allocInfo, m_commandBuffers.data()) == VK_SUCCESS, "Failed to allocate command buffers");
+
+	// Starting command buffer recording
+	for (auto i = 0; i < m_commandBuffers.size(); ++i)
+	{
+		// Describe how the command buffers are being used.
+		VkCommandBufferBeginInfo beginInfo{};
+		{
+			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+			beginInfo.flags = 0;	// How to use command buffer.
+			beginInfo.pInheritanceInfo = nullptr;	// Only relevant for secondary command buffers - which state to inherit from primary buffer.
+		}
+
+		ASSERT(vkBeginCommandBuffer(m_commandBuffers[i], &beginInfo) == VK_SUCCESS, "Failed to begin recording command buffer");
+
+		// Starting a render pass
+		VkClearValue clearColor = { 0, 0, 0, 1 };
+		VkRenderPassBeginInfo renderPassInfo{};
+		{
+			renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+			renderPassInfo.renderPass = m_renderPass;
+			renderPassInfo.framebuffer = m_swapChainFrameBuffers[i];
+			renderPassInfo.renderArea.offset = {0, 0};
+			renderPassInfo.renderArea.extent = m_swapChainExtent;
+
+			renderPassInfo.clearValueCount = 1;
+			renderPassInfo.pClearValues = &clearColor;
+		}
+
+		vkCmdBeginRenderPass(	m_commandBuffers[i], 
+								&renderPassInfo, 
+								VK_SUBPASS_CONTENTS_INLINE	// Details the render pass - It's a primary command buffer, everything will be sent in one go.
+		);
+
+		// Basic drawing
+		vkCmdBindPipeline(	m_commandBuffers[i], 
+							VK_PIPELINE_BIND_POINT_GRAPHICS,	// Graphics or compute pipeline	
+							m_graphicsPipeline
+		);
+
+		vkCmdDraw(m_commandBuffers[i], 3, 1, 0, 0);
+
+		// End render pass
+		vkCmdEndRenderPass(m_commandBuffers[i]);
+
+		ASSERT(vkEndCommandBuffer(m_commandBuffers[i]) == VK_SUCCESS, "Failed to record command buffer");
+	}
 }
 
 void HelloTriangle::MainLoop()
