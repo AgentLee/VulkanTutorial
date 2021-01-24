@@ -40,6 +40,8 @@ void HelloTriangle::InitVulkan()
 	CreateImageViews();
 	CreateRenderPass();
 	CreateGraphicsPipeline();
+	CreateFrameBuffers();
+	CreateCommandPool();
 }
 
 void HelloTriangle::CreateInstance()
@@ -1000,6 +1002,23 @@ void HelloTriangle::CreateFrameBuffers()
 	}
 }
 
+void HelloTriangle::CreateCommandPool()
+{
+	auto queueFamilyIndices = FindQueueFamilies(m_physicalDevice);
+
+	VkCommandPoolCreateInfo poolInfo{};
+	{
+		poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();	// We want to draw, use the graphics family
+		poolInfo.flags = 0;
+	}
+
+	if (vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create command pool");
+	}
+}
+
 void HelloTriangle::MainLoop()
 {
 	while (!glfwWindowShouldClose(m_window))
@@ -1010,6 +1029,8 @@ void HelloTriangle::MainLoop()
 
 void HelloTriangle::Cleanup()
 {
+	vkDestroyCommandPool(m_device, m_commandPool, nullptr);
+	
 	for (auto& framebuffer : m_swapChainFrameBuffers)
 	{
 		vkDestroyFramebuffer(m_device, framebuffer, nullptr);

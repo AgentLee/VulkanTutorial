@@ -76,6 +76,8 @@ private:
 	void CreateRenderPass();
 
 	void CreateFrameBuffers();
+
+	void CreateCommandPool();
 	
 private:
 	VkInstance m_instance;
@@ -95,6 +97,11 @@ private:
 	VkRenderPass m_renderPass;
 	VkPipelineLayout m_pipelineLayout;
 	VkPipeline m_graphicsPipeline;
+
+	// Manage the memory being used to store/allocate buffers.
+	// Write all the ops you want into the command buffer then
+	// tell Vulkan which commands to execute.
+	VkCommandPool m_commandPool;
 
 	GLFWwindow* m_window;
 };
