@@ -43,6 +43,7 @@ void HelloTriangle::InitVulkan()
 	CreateFrameBuffers();
 	CreateCommandPool();
 	CreateCommandBuffers();
+	CreateSemaphores();
 }
 
 void HelloTriangle::CreateInstance()
@@ -929,6 +930,30 @@ void HelloTriangle::CreateRenderPass()
 		// the layout(location = 0) out vec4 outColor directive!
 	}
 
+	VkSubpassDependency dependency{};
+	{
+		// Use a dependency to make sure the render pass waits until the pipeline writes to the buffer.
+		// Prevent the transition from happening until it's ready.
+
+		// Dependency indices and subpass
+		{
+			dependency.srcSubpass = VK_SUBPASS_EXTERNAL;	// Implicit subpass before/after render pass.
+			dependency.dstSubpass = 0;	// Our subpass
+		}
+
+		// Specify which operations to wait on and which stages they should occur
+		// Wait for swap chain to finish reading from image before we can access it.
+		{
+			dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			dependency.srcAccessMask = 0;
+		}
+
+		{
+			dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		}
+	}
+
 	// Create the render pass
 	VkRenderPassCreateInfo renderPassInfo{};
 	{
@@ -937,6 +962,8 @@ void HelloTriangle::CreateRenderPass()
 		renderPassInfo.pAttachments = &colorAttachment;
 		renderPassInfo.subpassCount = 1;
 		renderPassInfo.pSubpasses = &subpass;
+		renderPassInfo.dependencyCount = 1;
+		renderPassInfo.pDependencies = &dependency;
 	}
 
 	ASSERT(vkCreateRenderPass(m_device, &renderPassInfo, nullptr, &m_renderPass) == VK_SUCCESS, "Failed to create render pass");
@@ -1051,16 +1078,110 @@ void HelloTriangle::CreateCommandBuffers()
 	}
 }
 
+void HelloTriangle::CreateSemaphores()
+{
+	VkSemaphoreCreateInfo semaphoreInfo{};
+	{
+		semaphoreInfo.sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO;
+	}
+
+	auto imgAvailableSemRes = vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_imageAvailableSemaphore);
+	auto renderFinishedSemRes = vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_renderFinishedSemaphore);
+
+	ASSERT(imgAvailableSemRes == VK_SUCCESS && renderFinishedSemRes == VK_SUCCESS, "Failed to create semaphores");
+}
+
 void HelloTriangle::MainLoop()
 {
 	while (!glfwWindowShouldClose(m_window))
 	{
 		glfwPollEvents();
+		DrawFrame();
 	}
+}
+
+void HelloTriangle::DrawFrame()
+{
+	// -Get image from swap chain
+	// -Execute command buffer with the image as an attachment in the frame buffer
+	// -Return the image to the swap chain to present
+
+	// These events are asynchronous, we need to sync them up.
+	// Semaphores vs fences:
+	// -Fences used for syncing rendering
+	// -Semaphores used for syncing operations across command queues
+
+	uint32_t imageIndex;	// Store index of the image from the swap chain.
+	vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX, m_imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+
+	VkSemaphore waitSemaphores[] = { m_imageAvailableSemaphore };
+	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	VkSemaphore signalSemaphores[] = { m_renderFinishedSemaphore };
+
+	// Submit command buffer
+	
+	VkSubmitInfo submitInfo{};
+	{
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+		// Specify which semaphores to wait on before execution and which stage to wait on.
+		// We want to wait until the image is available so when the graphics pipeline writes to the color attachment.
+		// The wait semaphores should correspond to the wait stages array.
+		{
+			submitInfo.waitSemaphoreCount = 1;
+			submitInfo.pWaitSemaphores = waitSemaphores;
+			submitInfo.pWaitDstStageMask = waitStages;
+		}
+
+		// Specify which command buffers to submit for execution.
+		// We want to submit the buffer that binds the swap chain image we acquired as color attachment.
+		{
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &m_commandBuffers[imageIndex];
+		}
+
+		// Specify which semaphores to signal after execution.
+		{
+			submitInfo.signalSemaphoreCount = 1;
+			submitInfo.pSignalSemaphores = signalSemaphores;
+		}
+
+		ASSERT(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE) == VK_SUCCESS, "Failed to submit draw command buffer");
+	}
+
+	// Present
+	// Submit result back to swap chain to show on screen.
+	
+	VkSwapchainKHR swapChains[] = { m_swapChain };
+	VkPresentInfoKHR presentInfo{};
+	{
+		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
+		// Specify which semaphores to wait on before presenting.
+		{
+			presentInfo.waitSemaphoreCount = 1;
+			presentInfo.pWaitSemaphores = signalSemaphores;
+		}
+
+		// Specify swap chains to present images to and which image to present.
+		{
+			presentInfo.swapchainCount = 1;
+			presentInfo.pSwapchains = swapChains;
+			presentInfo.pImageIndices = &imageIndex;
+		}
+
+		// Specify array of results to check if the result was successful.
+		presentInfo.pResults = nullptr;
+	}
+	
+	vkQueuePresentKHR(m_presentQueue, &presentInfo);
 }
 
 void HelloTriangle::Cleanup()
 {
+	vkDestroySemaphore(m_device, m_imageAvailableSemaphore, nullptr);
+	vkDestroySemaphore(m_device, m_renderFinishedSemaphore, nullptr);
+	
 	vkDestroyCommandPool(m_device, m_commandPool, nullptr);
 	
 	for (auto& framebuffer : m_swapChainFrameBuffers)

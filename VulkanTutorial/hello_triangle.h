@@ -19,6 +19,7 @@ public:
 private:
 	void InitWindow();
 	void MainLoop();
+	void DrawFrame();
 	void Cleanup();
 
 	void InitVulkan();
@@ -79,6 +80,8 @@ private:
 
 	void CreateCommandPool();
 	void CreateCommandBuffers();
+
+	void CreateSemaphores();
 	
 private:
 	VkInstance m_instance;
@@ -105,5 +108,8 @@ private:
 	VkCommandPool m_commandPool;
 	std::vector<VkCommandBuffer> m_commandBuffers;
 
+	// One sem to signal acquisition and another to signal rendering finished for present. 
+	VkSemaphore m_imageAvailableSemaphore, m_renderFinishedSemaphore;
+	
 	GLFWwindow* m_window;
 };
