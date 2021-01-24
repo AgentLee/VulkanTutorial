@@ -649,13 +649,13 @@ void HelloTriangle::CreateImageViews()
 
 void HelloTriangle::CreateGraphicsPipeline()
 {
-	// Load shaders
-	auto vsFile = ReadFile("shaders/vert.spv");
-	auto fsFile = ReadFile("shaders/frag.spv");
+	// Load shader code
+	auto vsCode = ReadFile("shaders/vert.spv");
+	auto fsCode = ReadFile("shaders/frag.spv");
 
 	// Create modules
-	auto vsModule = CreateShaderModule(vsFile);
-	auto fsModule = CreateShaderModule(fsFile);
+	auto vsModule = CreateShaderModule(vsCode);
+	auto fsModule = CreateShaderModule(fsCode);
 
 	// Create shader stages
 	VkPipelineShaderStageCreateInfo vsStageInfo{};
@@ -670,14 +670,14 @@ void HelloTriangle::CreateGraphicsPipeline()
 	VkPipelineShaderStageCreateInfo fsStageInfo{};
 	{
 		fsStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		fsStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+		fsStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 		fsStageInfo.module = fsModule;
 		fsStageInfo.pName = "main";	// Specify entry point function
 		//fsStageInfo.pSpecializationInfo	// Specify values for shader constants
 	}
 
 	VkPipelineShaderStageCreateInfo shaderStages[] = { vsStageInfo, fsStageInfo };
-
+	
 	// Describe the vertex data being passed to the shader
 	// Bindings - spacing between data and whether the data is per vertex or per instance
 	// Attribute descriptions - the type of data being passed in and how to load them
@@ -837,6 +837,44 @@ void HelloTriangle::CreateGraphicsPipeline()
 	{
 		throw std::runtime_error("Failed to create pipeline layout");
 	}
+
+	// Create graphics pipeline
+	VkGraphicsPipelineCreateInfo pipelineInfo{};
+	{
+		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+		pipelineInfo.stageCount = 2;
+		pipelineInfo.pStages = shaderStages;
+
+		// Reference all the structures describing the fixed-function stage.
+		{
+			pipelineInfo.pVertexInputState = &vertexInputInfo;
+			pipelineInfo.pInputAssemblyState = &inputAssembly;
+			pipelineInfo.pViewportState = &viewportState;
+			pipelineInfo.pRasterizationState = &rasterizer;
+			pipelineInfo.pMultisampleState = &multisampling;
+			pipelineInfo.pColorBlendState = &colorBlending;
+		}
+
+		pipelineInfo.layout = m_pipelineLayout;
+
+		// Reference render pass and the subpass of this graphics pipeline.
+		{
+			pipelineInfo.renderPass = m_renderPass;
+			pipelineInfo.subpass = 0;
+		}
+
+		// Any render pass can be used with this pipeline as long as they are compatible with m_renderPass.
+		// You can create a new pass by deriving from this pipeline.
+		{
+			pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+			//pipelineInfo.basePipelineIndex = -1;
+		}
+	}
+
+	if (vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_graphicsPipeline) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create a graphics pipeline");
+	}
 	
 	vkDestroyShaderModule(m_device, vsModule, nullptr);
 	vkDestroyShaderModule(m_device, fsModule, nullptr);
@@ -938,6 +976,7 @@ void HelloTriangle::MainLoop()
 
 void HelloTriangle::Cleanup()
 {
+	vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
 	vkDestroyRenderPass(m_device, m_renderPass, nullptr);
 	
