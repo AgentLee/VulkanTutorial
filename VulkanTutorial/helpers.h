@@ -29,3 +29,17 @@ static std::vector<char> ReadFile(const std::string& filename)
 
 	return buffer;
 }
+
+//https://stackoverflow.com/questions/3767869/adding-message-to-assert
+#ifndef NDEBUG
+#define ASSERT(condition, message) \
+    do { \
+        if (! (condition)) { \
+            std::cerr << "Assertion `" #condition "` failed in " << __FILE__ \
+                      << " line " << __LINE__ << ": " << message << std::endl; \
+            exit(1); \
+        } \
+    } while (false)
+#else
+#   define ASSERT(condition, message) do { } while (false)
+#endif

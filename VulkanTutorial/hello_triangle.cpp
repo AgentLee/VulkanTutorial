@@ -131,10 +131,7 @@ void HelloTriangle::CreateInstance()
 	// Pointer to creation info
 	// Pointer to custom allocator callbacks (nullptr)
 	// Pointer to variable that stores the object
-	if (vkCreateInstance(&createInfo, nullptr, &m_instance) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create Vulkan instance");
-	}
+	ASSERT(vkCreateInstance(&createInfo, nullptr, &m_instance) == VK_SUCCESS, "Failed to create Vulkan instance");
 }
 
 void HelloTriangle::PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo)
@@ -162,10 +159,7 @@ void HelloTriangle::SetupDebugMessenger()
 	VkDebugUtilsMessengerCreateInfoEXT createInfo{};
 	PopulateDebugMessengerCreateInfo(createInfo);
 
-	if (DebugLayer::CreateDebugUtilsMessengerEXT(m_instance, &createInfo, nullptr, &m_debugMessenger) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to set up debug messenger");
-	}
+	ASSERT(DebugLayer::CreateDebugUtilsMessengerEXT(m_instance, &createInfo, nullptr, &m_debugMessenger) == VK_SUCCESS, "Failed to set up debug messenger");
 }
 
 bool HelloTriangle::CheckValidationLayerSupport()
@@ -424,10 +418,7 @@ void HelloTriangle::CreateLogicalDevice()
 		}
 	}
 
-	if (vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create logical device");
-	}
+	ASSERT(vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device) == VK_SUCCESS, "Failed to create logical device");
 
 	// Assign handles to queue
 	vkGetDeviceQueue(m_device, indices.graphicsFamily.value(), 0, &m_graphicsQueue);
@@ -436,10 +427,7 @@ void HelloTriangle::CreateLogicalDevice()
 
 void HelloTriangle::CreateSurface()
 {
-	if (glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create window surface");
-	}
+	ASSERT(glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface) == VK_SUCCESS, "Failed to create window surface");
 }
 
 HelloTriangle::SwapChainSupportDetails HelloTriangle::QuerySwapChainSupport(VkPhysicalDevice device)
@@ -591,10 +579,7 @@ void HelloTriangle::CreateSwapChain()
 		createInfo.oldSwapchain = VK_NULL_HANDLE;
 	}
 	
-	if (vkCreateSwapchainKHR(m_device, &createInfo, nullptr, &m_swapChain) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create swap chain");
-	}
+	ASSERT(vkCreateSwapchainKHR(m_device, &createInfo, nullptr, &m_swapChain) == VK_SUCCESS, "Failed to create swap chain");
 
 	// Get handles to the swap chain images.
 	vkGetSwapchainImagesKHR(m_device, m_swapChain, &imageCount, nullptr);
@@ -642,10 +627,7 @@ void HelloTriangle::CreateImageViews()
 			}
 		}
 
-		if (vkCreateImageView(m_device, &createInfo, nullptr, &m_swapChainImageViews[i]) != VK_SUCCESS)
-		{
-			throw std::runtime_error("Failed to create image view");
-		}
+		ASSERT(vkCreateImageView(m_device, &createInfo, nullptr, &m_swapChainImageViews[i]) == VK_SUCCESS, "Failed to create image view");
 	}
 }
 
@@ -835,10 +817,7 @@ void HelloTriangle::CreateGraphicsPipeline()
 		pipelineLayoutInfo.pPushConstantRanges = nullptr;
 	}
 
-	if (vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create pipeline layout");
-	}
+	ASSERT(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout) == VK_SUCCESS, "Failed to create pipeline layout");
 
 	// Create graphics pipeline
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
@@ -873,10 +852,7 @@ void HelloTriangle::CreateGraphicsPipeline()
 		}
 	}
 
-	if (vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_graphicsPipeline) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create a graphics pipeline");
-	}
+	ASSERT(vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_graphicsPipeline) == VK_SUCCESS, "Failed to create a graphics pipeline");
 	
 	vkDestroyShaderModule(m_device, vsModule, nullptr);
 	vkDestroyShaderModule(m_device, fsModule, nullptr);
@@ -962,10 +938,7 @@ void HelloTriangle::CreateRenderPass()
 		renderPassInfo.pSubpasses = &subpass;
 	}
 
-	if (vkCreateRenderPass(m_device, &renderPassInfo, nullptr, &m_renderPass) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create render pass");
-	}
+	ASSERT(vkCreateRenderPass(m_device, &renderPassInfo, nullptr, &m_renderPass) == VK_SUCCESS, "Failed to create render pass");
 }
 
 void HelloTriangle::CreateFrameBuffers()
@@ -995,10 +968,7 @@ void HelloTriangle::CreateFrameBuffers()
 			frameBufferInfo.layers = 1;
 		}
 
-		if (vkCreateFramebuffer(m_device, &frameBufferInfo, nullptr, &m_swapChainFrameBuffers[i]) != VK_SUCCESS) 
-		{
-			throw std::runtime_error("Failed to create frame buffer");
-		}
+		ASSERT(vkCreateFramebuffer(m_device, &frameBufferInfo, nullptr, &m_swapChainFrameBuffers[i]) == VK_SUCCESS, "Failed to create frame buffer");
 	}
 }
 
@@ -1013,10 +983,7 @@ void HelloTriangle::CreateCommandPool()
 		poolInfo.flags = 0;
 	}
 
-	if (vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create command pool");
-	}
+	ASSERT(vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_commandPool) == VK_SUCCESS, "Failed to create command pool");
 }
 
 void HelloTriangle::MainLoop()
