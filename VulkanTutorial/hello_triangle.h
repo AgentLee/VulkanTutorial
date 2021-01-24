@@ -81,7 +81,7 @@ private:
 	void CreateCommandPool();
 	void CreateCommandBuffers();
 
-	void CreateSemaphores();
+	void CreateSyncObjects();
 	
 private:
 	VkInstance m_instance;
@@ -109,7 +109,12 @@ private:
 	std::vector<VkCommandBuffer> m_commandBuffers;
 
 	// One sem to signal acquisition and another to signal rendering finished for present. 
-	VkSemaphore m_imageAvailableSemaphore, m_renderFinishedSemaphore;
+	std::vector<VkSemaphore> m_imageAvailableSemaphores, m_renderFinishedSemaphores;
+	// CPU-GPU sync
+	std::vector<VkFence> m_inFlightFences;
+	std::vector<VkFence> m_imagesInFlight;
+	
+	size_t m_currentFrame = 0;
 	
 	GLFWwindow* m_window;
 };
