@@ -1,5 +1,9 @@
 #include "hello_triangle.h"
 
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 #include <map>
 #include <set>
 #include <cstdint>
@@ -48,11 +52,15 @@ void HelloTriangle::InitVulkan()
 	CreateSwapChain();
 	CreateImageViews();
 	CreateRenderPass();
+	CreateDescriptorSetLayout();
 	CreateGraphicsPipeline();
 	CreateFrameBuffers();
 	CreateCommandPool();
 	CreateVertexBuffer();
 	CreateIndexBuffer();
+	CreateUniformBuffers();
+	CreateDescriptorPool();
+	CreateDescriptorSets();
 	CreateCommandBuffers();
 	CreateSyncObjects();
 }
@@ -603,6 +611,9 @@ void HelloTriangle::RecreateSwapChain()
 	CreateRenderPass();
 	CreateGraphicsPipeline();
 	CreateFrameBuffers();
+	CreateUniformBuffers();
+	CreateDescriptorPool();
+	CreateDescriptorSets();
 	CreateCommandBuffers();
 }
 
@@ -645,6 +656,31 @@ void HelloTriangle::CreateImageViews()
 
 		VK_ASSERT(vkCreateImageView(m_device, &createInfo, nullptr, &m_swapChainImageViews[i]), "Failed to create image view");
 	}
+}
+
+void HelloTriangle::CreateDescriptorSetLayout()
+{
+	// Descriptors allow shaders to access buffers and images.
+	// Descriptor Layouts specify the type of resources being used by the shader.
+	// Descriptor Sets specify the buffer or image that get bound to the descriptor (frame buffers specify image views to render pass attachments)
+
+	VkDescriptorSetLayoutBinding uboLayoutBinding{};
+	{
+		uboLayoutBinding.binding = 0;											// Binding located in the shader
+		uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;	// Type of descriptor
+		uboLayoutBinding.descriptorCount = 1;									// How many descriptors
+		uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;				// Which stage to use the descriptor
+		uboLayoutBinding.pImmutableSamplers = nullptr;							// Image sampling descriptor
+	}
+
+	VkDescriptorSetLayoutCreateInfo layoutInfo{};
+	{
+		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		layoutInfo.bindingCount = 1;
+		layoutInfo.pBindings = &uboLayoutBinding;
+	}
+
+	VK_ASSERT(vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_descriptorSetLayout), "Failed to create descriptor set layout");
 }
 
 void HelloTriangle::CreateGraphicsPipeline()
@@ -741,7 +777,7 @@ void HelloTriangle::CreateGraphicsPipeline()
 		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;	// How fragments are generated for geometry
 		rasterizer.lineWidth = 1.0f;
 		rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-		rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;	// Vertex order to be considered front facing
+		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;	// Vertex order to be considered front facing
 		rasterizer.depthBiasEnable = VK_FALSE;
 		rasterizer.depthBiasConstantFactor = 0.0f;
 		rasterizer.depthBiasClamp = 0.0f;
@@ -826,11 +862,12 @@ void HelloTriangle::CreateGraphicsPipeline()
 	}
 
 	// Describe the pipeline
+	// Specify which descriptor set the shaders are using.
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	{
 		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutInfo.setLayoutCount = 0;
-		pipelineLayoutInfo.pSetLayouts = nullptr;
+		pipelineLayoutInfo.setLayoutCount = 1;
+		pipelineLayoutInfo.pSetLayouts = &m_descriptorSetLayout;
 		pipelineLayoutInfo.pushConstantRangeCount = 0;
 		pipelineLayoutInfo.pPushConstantRanges = nullptr;
 	}
@@ -1187,7 +1224,11 @@ void HelloTriangle::CreateIndexBuffer()
 	// VK_BUFFER_USAGE_TRANSFER_DST_BIT - Use this buffer as the destination in transferring memory.
 	// VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT - The most optimal use of memory. We need to use a staging buffer for this since it's not directly accessible with CPU.
 	// The vertex buffer is device local. This means that we can't map memory directly to it but we can copy data from another buffer over.
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_indexBuffer, m_indexBufferMemory);
+	CreateBuffer(bufferSize, 
+		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, 
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
+		m_indexBuffer, 
+		m_indexBufferMemory);
 
 	// Copy from stage to vertex buffer
 	CopyBuffer(stagingBuffer, m_indexBuffer, bufferSize);
@@ -1196,6 +1237,113 @@ void HelloTriangle::CreateIndexBuffer()
 	{
 		vkDestroyBuffer(m_device, stagingBuffer, nullptr);
 		vkFreeMemory(m_device, stagingBufferMemory, nullptr);
+	}
+}
+
+void HelloTriangle::UpdateUniformBuffers(uint32_t currentImage)
+{
+	float time = GetCurrentTime();
+
+	UniformBufferObject ubo{};
+	{
+		ubo.model = glm::rotate(glm::mat4(1), time * glm::radians(90.0f), glm::vec3(0, 0, 1));
+		ubo.view = glm::lookAt(glm::vec3(2, 2, 2), glm::vec3(0), glm::vec3(0, 0, 1));
+		ubo.proj = glm::perspective(glm::radians(45.0f), (float)m_swapChainExtent.width / (float)m_swapChainExtent.height, 0.1f, 10.0f);
+		ubo.proj[1][1] *= -1.0f;
+	}
+
+	void* data;
+	VK_ASSERT(vkMapMemory(m_device, m_uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data), "Couldn't map uniform buffer");
+	memcpy(data, &ubo, sizeof(ubo));
+	vkUnmapMemory(m_device, m_uniformBuffersMemory[currentImage]);
+}
+
+void HelloTriangle::CreateUniformBuffers()
+{
+	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+	{
+		m_uniformBuffers.resize(m_swapChainImages.size());
+		m_uniformBuffersMemory.resize(m_swapChainImages.size());
+	}
+
+	for (size_t i = 0; i < m_swapChainImages.size(); ++i)
+	{
+		CreateBuffer(bufferSize, 
+			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+			m_uniformBuffers[i], 
+			m_uniformBuffersMemory[i]);
+	}
+}
+
+void HelloTriangle::CreateDescriptorPool()
+{
+	// Descriptor sets must be allocated from a command pool.
+	
+	VkDescriptorPoolSize poolSize{};
+	{
+		poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		poolSize.descriptorCount = static_cast<uint32_t>(m_swapChainImages.size());
+	}
+
+	// Allocate one descriptor every frame.
+	VkDescriptorPoolCreateInfo poolInfo{};
+	{
+		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		poolInfo.poolSizeCount = 1;
+		poolInfo.pPoolSizes = &poolSize;
+		poolInfo.maxSets = static_cast<uint32_t>(m_swapChainImages.size());	// Max number of sets to be allocated
+	}
+
+	// Create descriptor pool
+	VK_ASSERT(vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool), "Failed to create descriptor pool");
+}
+
+void HelloTriangle::CreateDescriptorSets()
+{
+	std::vector<VkDescriptorSetLayout> layouts(m_swapChainImages.size(), m_descriptorSetLayout);
+
+	VkDescriptorSetAllocateInfo allocInfo{};
+	{
+		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		allocInfo.descriptorPool = m_descriptorPool;
+		allocInfo.descriptorSetCount = static_cast<uint32_t>(m_swapChainImages.size());
+		allocInfo.pSetLayouts = layouts.data();
+	}
+
+	// Create one descriptor for each image in the swap chain.
+	m_descriptorSets.resize(m_swapChainImages.size());
+
+	// Each descriptor set that gets allocated will also get a uniform buffer descriptor.
+	VK_ASSERT(vkAllocateDescriptorSets(m_device, &allocInfo, m_descriptorSets.data()), "Failed to allocate descriptor sets");
+
+	// Configure descriptor sets.
+	for (size_t i = 0; i < NumSwapChainImages(); ++i)
+	{
+		// Specify which buffer we want the descriptor to refer to.
+		VkDescriptorBufferInfo bufferInfo{};
+		{
+			bufferInfo.buffer = m_uniformBuffers[i];
+			bufferInfo.offset = 0;
+			bufferInfo.range = sizeof(UniformBufferObject);
+		}
+
+		// Set up for update
+		VkWriteDescriptorSet descriptorWrite{};
+		{
+			descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrite.dstSet = m_descriptorSets[i];
+			descriptorWrite.dstBinding = 0;										// Which slot the buffer is in the shader
+			descriptorWrite.dstArrayElement = 0;								// First index in array we're updating
+			descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;	// Type of descriptor
+			descriptorWrite.descriptorCount = 1;								// How many array elements we're updating
+			descriptorWrite.pBufferInfo = &bufferInfo;							// What data is the descriptor referring to
+			descriptorWrite.pImageInfo = nullptr;								// What image is the descriptor referring to
+			descriptorWrite.pTexelBufferView = nullptr;							// What view is the descriptor referring to
+		}
+
+		// Update the descriptor set
+		vkUpdateDescriptorSets(m_device, 1, &descriptorWrite, 0, nullptr);
 	}
 }
 
@@ -1282,7 +1430,11 @@ void HelloTriangle::CreateCommandBuffers()
 
 		// Bind index buffer
 		vkCmdBindIndexBuffer(m_commandBuffers[i], m_indexBuffer, 0, VK_INDEX_TYPE_UINT16);
-		
+
+		// Bind descriptor sets
+		vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
+
+		// Draw
 		vkCmdDrawIndexed(m_commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 		
 		// End render pass
@@ -1373,8 +1525,10 @@ void HelloTriangle::DrawFrame()
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 	VkSemaphore signalSemaphores[] = { m_renderFinishedSemaphores[m_currentFrame] };
 
-	// Submit command buffer
+	// Update uniforms
+	UpdateUniformBuffers(imageIndex);
 	
+	// Submit command buffer
 	VkSubmitInfo submitInfo{};
 	{
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1458,12 +1612,22 @@ void HelloTriangle::CleanupSwapChain()
 	}
 
 	vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
+
+	for (size_t i = 0; i < m_swapChainImages.size(); ++i)
+	{
+		vkDestroyBuffer(m_device, m_uniformBuffers[i], nullptr);
+		vkFreeMemory(m_device, m_uniformBuffersMemory[i], nullptr);
+	}
+
+	vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr);
 }
 
 void HelloTriangle::Cleanup()
 {
 	CleanupSwapChain();
 
+	vkDestroyDescriptorSetLayout(m_device, m_descriptorSetLayout, nullptr);
+	
 	vkDestroyBuffer(m_device, m_vertexBuffer, nullptr);
 	vkFreeMemory(m_device, m_vertexBufferMemory, nullptr);
 

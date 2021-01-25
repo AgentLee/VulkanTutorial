@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <fstream>
 #include <vector>
 
@@ -28,6 +29,15 @@ static std::vector<char> ReadFile(const std::string& filename)
 	}
 
 	return buffer;
+}
+
+static float GetCurrentTime()
+{
+	static auto startTime = std::chrono::high_resolution_clock::now();
+	auto currentTime = std::chrono::high_resolution_clock::now();
+	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+	return time;
 }
 
 //https://stackoverflow.com/questions/3767869/adding-message-to-assert

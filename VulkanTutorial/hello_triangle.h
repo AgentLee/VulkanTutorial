@@ -123,6 +123,7 @@ private:
 	void CleanupSwapChain();
 	void CreateImageViews();
 	
+	void CreateDescriptorSetLayout();
 	void CreateGraphicsPipeline();
 	VkShaderModule CreateShaderModule(const std::vector<char>& code);
 
@@ -137,11 +138,18 @@ private:
 	// TODO: abstract out vbo and ibo functions.
 	void CreateVertexBuffer();
 	void CreateIndexBuffer();
+	void CreateUniformBuffers();
+	void CreateDescriptorPool();
+	void CreateDescriptorSets();
+	void UpdateUniformBuffers(uint32_t currentImage);
 	uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
 	void CreateCommandBuffers();
 
 	void CreateSyncObjects();
+
+public:
+	size_t NumSwapChainImages() { return m_swapChainImages.size(); }
 
 private:
 	VkInstance m_instance;
@@ -159,6 +167,7 @@ private:
 	std::vector<VkFramebuffer> m_swapChainFrameBuffers;
 	
 	VkRenderPass m_renderPass;
+	VkDescriptorSetLayout m_descriptorSetLayout;
 	VkPipelineLayout m_pipelineLayout;
 	VkPipeline m_graphicsPipeline;
 
@@ -167,6 +176,8 @@ private:
 	// tell Vulkan which commands to execute.
 	VkCommandPool m_commandPool;
 	std::vector<VkCommandBuffer> m_commandBuffers;
+	VkDescriptorPool m_descriptorPool;
+	std::vector<VkDescriptorSet> m_descriptorSets;
 
 	// One sem to signal acquisition and another to signal rendering finished for present. 
 	std::vector<VkSemaphore> m_imageAvailableSemaphores, m_renderFinishedSemaphores;
@@ -179,6 +190,11 @@ private:
 	VkDeviceMemory m_vertexBufferMemory;
 	VkBuffer m_indexBuffer;
 	VkDeviceMemory m_indexBufferMemory;
+
+	// Copying new data each frame so no staging buffer.
+	// Multiple buffers make sense since multiple frames can be in flight at the same time.
+	std::vector<VkBuffer> m_uniformBuffers;
+	std::vector<VkDeviceMemory> m_uniformBuffersMemory;
 	
 	size_t m_currentFrame = 0;
 
