@@ -135,6 +135,7 @@ private:
 
 	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& memory);
 	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+	void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 	// TODO: abstract out vbo and ibo functions.
 	void CreateVertexBuffer();
 	void CreateIndexBuffer();
@@ -145,9 +146,15 @@ private:
 	uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
 	void CreateCommandBuffers();
+	VkCommandBuffer BeginSingleTimeCommands();
+	void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 
 	void CreateSyncObjects();
 
+	void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiliing, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+	void CreateTextureImage();
+	void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+	
 public:
 	size_t NumSwapChainImages() { return m_swapChainImages.size(); }
 
@@ -195,6 +202,10 @@ private:
 	// Multiple buffers make sense since multiple frames can be in flight at the same time.
 	std::vector<VkBuffer> m_uniformBuffers;
 	std::vector<VkDeviceMemory> m_uniformBuffersMemory;
+
+	// Textures
+	VkImage m_textureImage;
+	VkDeviceMemory m_textureImageMemory;
 	
 	size_t m_currentFrame = 0;
 
