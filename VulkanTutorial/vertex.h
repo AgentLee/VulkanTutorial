@@ -9,7 +9,7 @@ public:
 	glm::vec3 position;
 	glm::vec3 color;
 	glm::vec2 uv;
-
+	
 	static VkVertexInputBindingDescription GetBindingDescription()
 	{
 		// Determine per-vertex or per-instance, how many bytes between data entries.
@@ -54,5 +54,10 @@ public:
 		}
 
 		return desc;
+	}
+
+	bool operator==(const Vertex& other) const
+	{
+		return position == other.position && color == other.color && uv == other.uv;
 	}
 };

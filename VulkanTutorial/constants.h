@@ -7,6 +7,9 @@ const uint32_t HEIGHT = 600;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
+const std::string MODEL_PATH = "meshes/viking_room.obj";
+const std::string TEXTURE_PATH = "textures/viking_room.png";
+
 const std::vector<const char*> g_validationLayers = {
 	"VK_LAYER_KHRONOS_validation",
 };

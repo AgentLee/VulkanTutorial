@@ -8,10 +8,14 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
+
 #include <map>
 #include <set>
 #include <cstdint>
 #include <algorithm>
+#include <unordered_map>
 
 void HelloTriangle::Run()
 {
@@ -64,6 +68,7 @@ void HelloTriangle::InitVulkan()
 	CreateTextureImage();
 	CreateTextureImageView();
 	CreateTextureSampler();
+	LoadModel();
 	CreateVertexBuffer();
 	CreateIndexBuffer();
 	CreateUniformBuffers();
@@ -1213,7 +1218,7 @@ void HelloTriangle::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t w
 
 void HelloTriangle::CreateVertexBuffer()
 {
-	auto bufferSize = sizeof(Vertex) * vertices.size();
+	auto bufferSize = sizeof(Vertex) * m_vertices.size();
 
 	// Create a temporary buffer -----
 	// Use the staging buffer to map and copy vertex data.
@@ -1230,7 +1235,7 @@ void HelloTriangle::CreateVertexBuffer()
 		VK_ASSERT(vkMapMemory(m_device, stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map data to vertex buffer");
 		
 		// Copy data over
-		memcpy(data, vertices.data(), (size_t)bufferSize);
+		memcpy(data, m_vertices.data(), (size_t)bufferSize);
 		
 		// Unmap
 		vkUnmapMemory(m_device, stagingBufferMemory);
@@ -1253,7 +1258,7 @@ void HelloTriangle::CreateVertexBuffer()
 
 void HelloTriangle::CreateIndexBuffer()
 {
-	VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+	VkDeviceSize bufferSize = sizeof(m_indices[0]) * m_indices.size();
 
 	// Create a temporary buffer -----
 	// Use the staging buffer to map and copy index data.
@@ -1270,7 +1275,7 @@ void HelloTriangle::CreateIndexBuffer()
 		VK_ASSERT(vkMapMemory(m_device, stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map data to index buffer");
 
 		// Copy data over
-		memcpy(data, indices.data(), (size_t)bufferSize);
+		memcpy(data, m_indices.data(), (size_t)bufferSize);
 
 		// Unmap
 		vkUnmapMemory(m_device, stagingBufferMemory);
@@ -1509,13 +1514,13 @@ void HelloTriangle::CreateCommandBuffers()
 		vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
 
 		// Bind index buffer
-		vkCmdBindIndexBuffer(m_commandBuffers[i], m_indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+		vkCmdBindIndexBuffer(m_commandBuffers[i], m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 		// Bind descriptor sets
 		vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
 
 		// Draw
-		vkCmdDrawIndexed(m_commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+		vkCmdDrawIndexed(m_commandBuffers[i], static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
 		
 		// End render pass
 		vkCmdEndRenderPass(m_commandBuffers[i]);
@@ -1640,7 +1645,7 @@ void HelloTriangle::CreateTextureImage()
 {
 	int texWidth, texHeight, texChannels;
 	// Get image
-	stbi_uc* pixels = stbi_load("textures/statue.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+	stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 
 	VkDeviceSize imageSize = texWidth * texHeight * 4;	// Multiply by 4 for each channel RGBA
 
@@ -2114,4 +2119,44 @@ void HelloTriangle::Cleanup()
 
 	glfwDestroyWindow(m_window);
 	glfwTerminate();
+}
+
+// TODO: this should be in its own class.
+void HelloTriangle::LoadModel()
+{
+	using namespace tinyobj;
+	attrib_t attrib;
+	std::vector<shape_t> shapes;
+	std::vector<material_t> materials;
+	std::string warning, error;
+
+	if (!LoadObj(&attrib, &shapes, &materials, &warning, &error, MODEL_PATH.c_str()))
+	{
+		throw std::runtime_error(warning + error);
+	}
+
+	for (const auto& shape : shapes)
+	{
+		for (const auto& index : shape.mesh.indices)
+		{
+			Vertex vertex{};
+			{
+				vertex.position = {
+					attrib.vertices[3 * index.vertex_index + 0],
+					attrib.vertices[3 * index.vertex_index + 1],
+					attrib.vertices[3 * index.vertex_index + 2],
+				};
+
+				vertex.uv = {
+					attrib.texcoords[2 * index.texcoord_index + 0],
+					1 - attrib.texcoords[2 * index.texcoord_index + 1],	// TinyObj does some weird flipping.
+				};
+
+				vertex.color = { 1, 1, 1 };
+			}
+			
+			m_vertices.push_back(vertex);
+			m_indices.push_back(static_cast<uint32_t>(m_indices.size()));
+		}
+	}
 }
