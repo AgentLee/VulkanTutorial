@@ -154,6 +154,9 @@ private:
 	void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiliing, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 	void CreateTextureImage();
 	void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+	VkImageView CreateImageView(VkImage image, VkFormat format);
+	void CreateTextureImageView();
+	void CreateTextureSampler();
 	
 public:
 	size_t NumSwapChainImages() { return m_swapChainImages.size(); }
@@ -206,6 +209,8 @@ private:
 	// Textures
 	VkImage m_textureImage;
 	VkDeviceMemory m_textureImageMemory;
+	VkImageView m_textureImageView;
+	VkSampler m_textureSampler;
 	
 	size_t m_currentFrame = 0;
 

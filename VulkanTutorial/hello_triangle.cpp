@@ -60,6 +60,8 @@ void HelloTriangle::InitVulkan()
 	CreateFrameBuffers();
 	CreateCommandPool();
 	CreateTextureImage();
+	CreateTextureImageView();
+	CreateTextureSampler();
 	CreateVertexBuffer();
 	CreateIndexBuffer();
 	CreateUniformBuffers();
@@ -268,8 +270,12 @@ bool HelloTriangle::IsDeviceCompatible(VkPhysicalDevice device)
 		auto swapChainSupport = QuerySwapChainSupport(device);
 		swapChainUsable = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
 	}
+
+	// TODO: These should probably be an enum.
+	VkPhysicalDeviceFeatures supportedFeatures;
+	vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
 	
-	return indices.IsComplete() && extensionsSupported && swapChainUsable;
+	return indices.IsComplete() && extensionsSupported && swapChainUsable && supportedFeatures.samplerAnisotropy;
 #else
 	VkPhysicalDeviceProperties deviceProperties;
 	vkGetPhysicalDeviceProperties(device, &deviceProperties);
@@ -395,7 +401,7 @@ void HelloTriangle::CreateLogicalDevice()
 	// Specify device features
 	VkPhysicalDeviceFeatures deviceFeatures{};
 	{
-		// TODO
+		deviceFeatures.samplerAnisotropy = VK_TRUE;
 	}
 
 	// Create logical device
@@ -629,36 +635,7 @@ void HelloTriangle::CreateImageViews()
 
 	for (size_t i = 0; i < m_swapChainImages.size(); ++i)
 	{
-		VkImageViewCreateInfo createInfo{};
-		{
-			createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-			createInfo.image = m_swapChainImages[i];
-
-			// How to interpret the image data
-			{
-				createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-				createInfo.format = m_swapChainImageFormat;
-			}
-
-			// Swizzle color channels
-			{
-				createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-				createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-				createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-				createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-			}
-
-			// Describes what the purpose of the image is and how to access the data
-			{
-				createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-				createInfo.subresourceRange.baseMipLevel = 0;
-				createInfo.subresourceRange.levelCount = 1;
-				createInfo.subresourceRange.baseArrayLayer = 0;
-				createInfo.subresourceRange.layerCount = 1;
-			}
-		}
-
-		VK_ASSERT(vkCreateImageView(m_device, &createInfo, nullptr, &m_swapChainImageViews[i]), "Failed to create image view");
+		m_swapChainImageViews[i] = CreateImageView(m_swapChainImages[i], m_swapChainImageFormat);
 	}
 }
 
@@ -1698,6 +1675,106 @@ void HelloTriangle::TransitionImageLayout(VkImage image, VkFormat format, VkImag
 	EndSingleTimeCommands(commandBuffer);
 }
 
+VkImageView HelloTriangle::CreateImageView(VkImage image, VkFormat format)
+{
+	VkImageViewCreateInfo viewInfo{};
+	{
+		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		viewInfo.image = image;
+
+		// How to interpret the image data
+		{
+			viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+			viewInfo.format = format;
+		}
+
+		// Swizzle color channels
+		{
+			viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+			viewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+			viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+			viewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+		}
+
+		// Describes what the purpose of the image is and how to access the data
+		{
+			viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			viewInfo.subresourceRange.baseMipLevel = 0;
+			viewInfo.subresourceRange.levelCount = 1;
+			viewInfo.subresourceRange.baseArrayLayer = 0;
+			viewInfo.subresourceRange.layerCount = 1;
+		}
+	}
+
+	VkImageView imageView;
+	VK_ASSERT(vkCreateImageView(m_device, &viewInfo, nullptr, &imageView), "Failed to create image view");
+
+	return imageView;
+}
+
+void HelloTriangle::CreateTextureImageView()
+{
+	// Create a view in order to access images just like with the swap chain.
+	m_textureImageView = CreateImageView(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB);
+}
+
+void HelloTriangle::CreateTextureSampler()
+{
+	// Textures should be accessed through a sampler.
+	// Samplers will apply filtering and transformations.
+
+	VkPhysicalDeviceProperties properties{};
+	vkGetPhysicalDeviceProperties(m_physicalDevice, &properties);
+	
+	VkSamplerCreateInfo samplerInfo{};
+	{
+		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+
+		// How to interpolate texels
+		{
+			samplerInfo.magFilter = VK_FILTER_LINEAR;
+			samplerInfo.minFilter = VK_FILTER_LINEAR;
+		}
+
+		// Clamp, Wrap
+		{
+			samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		}
+
+		// Limit the amount of texel samples used to calculate the final color.
+		{
+			samplerInfo.anisotropyEnable = VK_TRUE;
+			samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+		}
+
+		// Which color is returned when sampling beyond the image.
+		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+
+		// Which coordinate system to use to address texels the image.
+		// TRUE -> [0, texWidth) and [0, texHeight)
+		// FALSE -> [0, 1)
+		samplerInfo.unnormalizedCoordinates = VK_FALSE;
+
+		// Texels will be compared to a value and the result is used for filtering.
+		// TODO: future chapter.
+		{
+			samplerInfo.compareEnable = VK_FALSE;
+			samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+		}
+
+		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		samplerInfo.mipLodBias = 0.0f;
+		samplerInfo.minLod = 0.0f;
+		samplerInfo.maxLod = 0.0f;
+	}
+
+	// The sampler is distinct from the image. The sampler is a way to get data from a texture so we don't need to ref the image here.
+	// This is different than other APIs which requires referring to the actual image.
+	VK_ASSERT(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_textureSampler), "Couldn't create texture sampler");
+}
+
 void HelloTriangle::MainLoop()
 {
 	while (!glfwWindowShouldClose(m_window))
@@ -1851,6 +1928,8 @@ void HelloTriangle::Cleanup()
 {
 	CleanupSwapChain();
 
+	vkDestroySampler(m_device, m_textureSampler, nullptr);
+	vkDestroyImageView(m_device, m_textureImageView, nullptr);
 	vkDestroyImage(m_device, m_textureImage, nullptr);
 	vkFreeMemory(m_device, m_textureImageMemory, nullptr);
 
