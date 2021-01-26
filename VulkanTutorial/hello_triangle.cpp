@@ -2135,6 +2135,8 @@ void HelloTriangle::LoadModel()
 		throw std::runtime_error(warning + error);
 	}
 
+	std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+	
 	for (const auto& shape : shapes)
 	{
 		for (const auto& index : shape.mesh.indices)
@@ -2154,9 +2156,13 @@ void HelloTriangle::LoadModel()
 
 				vertex.color = { 1, 1, 1 };
 			}
+
+			if (uniqueVertices.count(vertex) == 0) {
+				uniqueVertices[vertex] = static_cast<uint32_t>(m_vertices.size());
+				m_vertices.push_back(vertex);
+			}
 			
-			m_vertices.push_back(vertex);
-			m_indices.push_back(static_cast<uint32_t>(m_indices.size()));
+			m_indices.push_back(uniqueVertices[vertex]);
 		}
 	}
 }
