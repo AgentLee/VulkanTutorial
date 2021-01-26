@@ -654,11 +654,23 @@ void HelloTriangle::CreateDescriptorSetLayout()
 		uboLayoutBinding.pImmutableSamplers = nullptr;							// Image sampling descriptor
 	}
 
+	// We need to create a combined image sampler. This way teh shader can access the image through the sampler.
+	VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+	{
+		samplerLayoutBinding.binding = 1;
+		samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding.descriptorCount = 1;
+		samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;	// When do you want to use the image			
+		samplerLayoutBinding.pImmutableSamplers = nullptr;
+	}
+
+	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
+
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	{
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		layoutInfo.bindingCount = 1;
-		layoutInfo.pBindings = &uboLayoutBinding;
+		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());;
+		layoutInfo.pBindings = bindings.data();
 	}
 
 	VK_ASSERT(vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_descriptorSetLayout), "Failed to create descriptor set layout");
@@ -1268,18 +1280,20 @@ void HelloTriangle::CreateDescriptorPool()
 {
 	// Descriptor sets must be allocated from a command pool.
 	
-	VkDescriptorPoolSize poolSize{};
+	std::array<VkDescriptorPoolSize, 2> poolSizes{};
 	{
-		poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		poolSize.descriptorCount = static_cast<uint32_t>(m_swapChainImages.size());
+		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		poolSizes[0].descriptorCount = static_cast<uint32_t>(m_swapChainImages.size());
+		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[1].descriptorCount = static_cast<uint32_t>(m_swapChainImages.size());
 	}
 
 	// Allocate one descriptor every frame.
 	VkDescriptorPoolCreateInfo poolInfo{};
 	{
 		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		poolInfo.poolSizeCount = 1;
-		poolInfo.pPoolSizes = &poolSize;
+		poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+		poolInfo.pPoolSizes = poolSizes.data();
 		poolInfo.maxSets = static_cast<uint32_t>(m_swapChainImages.size());	// Max number of sets to be allocated
 	}
 
@@ -1316,22 +1330,40 @@ void HelloTriangle::CreateDescriptorSets()
 			bufferInfo.range = sizeof(UniformBufferObject);
 		}
 
-		// Set up for update
-		VkWriteDescriptorSet descriptorWrite{};
+		// Bind image and sampler
+		VkDescriptorImageInfo imageInfo{};
 		{
-			descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrite.dstSet = m_descriptorSets[i];
-			descriptorWrite.dstBinding = 0;										// Which slot the buffer is in the shader
-			descriptorWrite.dstArrayElement = 0;								// First index in array we're updating
-			descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;	// Type of descriptor
-			descriptorWrite.descriptorCount = 1;								// How many array elements we're updating
-			descriptorWrite.pBufferInfo = &bufferInfo;							// What data is the descriptor referring to
-			descriptorWrite.pImageInfo = nullptr;								// What image is the descriptor referring to
-			descriptorWrite.pTexelBufferView = nullptr;							// What view is the descriptor referring to
+			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			imageInfo.imageView = m_textureImageView;
+			imageInfo.sampler = m_textureSampler;
 		}
 
+		// Set up for update
+		std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+		{
+			descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[0].dstSet = m_descriptorSets[i];
+			descriptorWrites[0].dstBinding = 0;										// Which slot the buffer is in the shader
+			descriptorWrites[0].dstArrayElement = 0;								// First index in array we're updating
+			descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;	// Type of descriptor
+			descriptorWrites[0].descriptorCount = 1;								// How many array elements we're updating
+			descriptorWrites[0].pBufferInfo = &bufferInfo;							// What data is the descriptor referring to
+			descriptorWrites[0].pImageInfo = nullptr;								// What image is the descriptor referring to
+			descriptorWrites[0].pTexelBufferView = nullptr;							// What view is the descriptor referring to
+
+			descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[1].dstSet = m_descriptorSets[i];
+			descriptorWrites[1].dstBinding = 1;										// Which slot the buffer is in the shader
+			descriptorWrites[1].dstArrayElement = 0;								// First index in array we're updating
+			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			descriptorWrites[1].descriptorCount = 1;								// How many array elements we're updating
+			descriptorWrites[1].pBufferInfo = nullptr;								// What data is the descriptor referring to
+			descriptorWrites[1].pImageInfo = &imageInfo;							// What image is the descriptor referring to
+			descriptorWrites[1].pTexelBufferView = nullptr;							// What view is the descriptor referring to
+		}
+		
 		// Update the descriptor set
-		vkUpdateDescriptorSets(m_device, 1, &descriptorWrite, 0, nullptr);
+		vkUpdateDescriptorSets(m_device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 	}
 }
 

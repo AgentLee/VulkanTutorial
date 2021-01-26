@@ -18,6 +18,7 @@ struct Vertex
 {
 	glm::vec2 position;
 	glm::vec3 color;
+	glm::vec2 uv;
 
 	static VkVertexInputBindingDescription GetBindingDescription()
 	{
@@ -32,10 +33,10 @@ struct Vertex
 		return desc;
 	}
 
-	static std::array<struct VkVertexInputAttributeDescription, 2> GetAttributeDescriptions()
+	static std::array<struct VkVertexInputAttributeDescription, 3> GetAttributeDescriptions()
 	{
 		// Describes how to handle vertex data.
-		std::array<VkVertexInputAttributeDescription, 2> desc{};
+		std::array<VkVertexInputAttributeDescription, 3> desc{};
 		{
 			// Position
 			{
@@ -51,6 +52,14 @@ struct Vertex
 				desc[1].location = 1;							// Where to find in the shader
 				desc[1].format = VK_FORMAT_R32G32B32_SFLOAT;	// Type of data
 				desc[1].offset = offsetof(Vertex, color);		// Bytes between data
+			}
+
+			// UV
+			{
+				desc[2].binding = 0;							// Which binding the data is coming from
+				desc[2].location = 2;							// Where to find in the shader
+				desc[2].format = VK_FORMAT_R32G32_SFLOAT;		// Type of data
+				desc[2].offset = offsetof(Vertex, uv);		// Bytes between data
 			}
 		}
 
@@ -220,10 +229,10 @@ private:
 
 private:
 	const std::vector<Vertex> vertices = {
-		{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-		{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-		{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-		{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+		{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+		{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+		{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+		{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
 	};
 
 	const std::vector<uint16_t> indices = {
