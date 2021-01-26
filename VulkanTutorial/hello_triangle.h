@@ -44,7 +44,8 @@ private:
 	bool IsDeviceCompatible(VkPhysicalDevice device);
 	bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
 	int RateDeviceCompatibility(VkPhysicalDevice device);
-
+	VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
+	
 	struct QueueFamilyIndices
 	{
 		std::optional<uint32_t> graphicsFamily;
@@ -108,9 +109,13 @@ private:
 	void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiliing, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 	void CreateTextureImage();
 	void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
-	VkImageView CreateImageView(VkImage image, VkFormat format);
+	VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 	void CreateTextureImageView();
 	void CreateTextureSampler();
+
+	void CreateDepthResources();
+	VkFormat FindDepthFormat();
+	bool HasStencilComponent(VkFormat format);
 	
 public:
 	size_t NumSwapChainImages() { return m_swapChainImages.size(); }
@@ -165,6 +170,11 @@ private:
 	VkDeviceMemory m_textureImageMemory;
 	VkImageView m_textureImageView;
 	VkSampler m_textureSampler;
+
+	// Depth
+	VkImage m_depthImage;
+	VkDeviceMemory m_depthImageMemory;
+	VkImageView m_depthImageView;
 	
 	size_t m_currentFrame = 0;
 
@@ -177,10 +187,16 @@ private:
 		{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
 		{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
 		{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-		{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
+		{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+
+		{ {-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+		{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+		{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+		{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
 	};
 
 	const std::vector<uint16_t> indices = {
-		0, 1, 2, 2, 3, 0
+		0, 1, 2, 2, 3, 0,
+		4, 5, 6, 6, 7, 4,
 	};
 };
