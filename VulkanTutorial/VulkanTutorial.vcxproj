@@ -167,6 +167,7 @@
     <ClInclude Include="debug_layer.h" />
     <ClInclude Include="hello_triangle.h" />
     <ClInclude Include="helpers.h" />
+    <ClInclude Include="vertex.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Shaders\compile.bat" />

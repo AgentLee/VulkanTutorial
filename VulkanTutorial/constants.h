@@ -1,4 +1,5 @@
 #include <iostream>
+#include <glm/glm.hpp>
 
 // Screen coordinates
 const uint32_t WIDTH = 800;
