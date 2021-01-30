@@ -134,6 +134,7 @@ void HelloTriangle::CreateInstance()
 		else
 		{
 			createInfo.enabledLayerCount = 0;
+			createInfo.pNext = nullptr;
 		}
 	}
 	
@@ -768,7 +769,7 @@ void HelloTriangle::CreateGraphicsPipeline()
 		viewport.width = (float)m_swapChainExtent.width;
 		viewport.height = (float)m_swapChainExtent.height;
 		viewport.minDepth = 0.0f;
-		viewport.maxDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
 	}
 
 	// Scissors
@@ -798,7 +799,7 @@ void HelloTriangle::CreateGraphicsPipeline()
 		rasterizer.rasterizerDiscardEnable = VK_FALSE;	// Setting to true results in geometry never going to the fragment shader
 		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;	// How fragments are generated for geometry
 		rasterizer.lineWidth = 1.0f;
-		rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+		rasterizer.cullMode = VK_CULL_MODE_NONE;
 		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;	// Vertex order to be considered front facing
 		rasterizer.depthBiasEnable = VK_FALSE;
 		rasterizer.depthBiasConstantFactor = 0.0f;
@@ -1437,7 +1438,7 @@ uint32_t HelloTriangle::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlag
 	// Find the memory type that is suitable with the buffer and make sure it has the properties to do so.
 	for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i)
 	{
-		if(typeFilter & (1 << i) && (memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
+		if (typeFilter & (1 << i) && (memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
 		{
 			return i;
 		}
