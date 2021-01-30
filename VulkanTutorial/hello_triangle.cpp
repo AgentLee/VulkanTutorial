@@ -1011,7 +1011,7 @@ void HelloTriangle::CreateRenderPass()
 		depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		depthAttachment.finalLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL;
+		depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 	}
 
 	VkAttachmentReference depthAttachmentRef{};
@@ -1900,7 +1900,7 @@ void HelloTriangle::CreateDepthResources()
 					m_swapChainExtent.height, 
 					depthFormat, 
 					VK_IMAGE_TILING_OPTIMAL, 
-					VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT,
+					VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 					VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
 					m_depthImage, 
 					m_depthImageMemory);
@@ -1908,8 +1908,6 @@ void HelloTriangle::CreateDepthResources()
 	m_depthImageView = CreateImageView(m_depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
 
 	TransitionImageLayout(m_depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-
-	
 }
 
 VkFormat HelloTriangle::FindDepthFormat()
