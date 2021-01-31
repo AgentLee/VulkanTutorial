@@ -665,7 +665,7 @@ void HelloTriangle::CreateImageViews()
 
 	for (size_t i = 0; i < m_swapChainImages.size(); ++i)
 	{
-		m_swapChainImageViews[i] = CreateImageView(m_swapChainImages[i], m_swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
+		m_swapChainImageViews[i] = CreateImageView(m_swapChainImages[i], m_swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 	}
 }
 
@@ -1304,10 +1304,11 @@ void HelloTriangle::CreateIndexBuffer()
 void HelloTriangle::UpdateUniformBuffers(uint32_t currentImage)
 {
 	float time = GetCurrentTime();
+	time = 1.0f;
 
 	UniformBufferObject ubo{};
 	{
-		ubo.model = glm::rotate(glm::mat4(1), time * glm::radians(90.0f), glm::vec3(0, 0, 1));
+		ubo.model = glm::rotate(glm::mat4(1), time * glm::radians(0.0f), glm::vec3(0, 0, 1));
 		ubo.view = glm::lookAt(glm::vec3(2, 2, 2), glm::vec3(0), glm::vec3(0, 0, 1));
 		ubo.proj = glm::perspective(glm::radians(45.0f), (float)m_swapChainExtent.width / (float)m_swapChainExtent.height, 0.1f, 10.0f);
 		ubo.proj[1][1] *= -1.0f;
@@ -1603,8 +1604,8 @@ void HelloTriangle::CreateSyncObjects()
 	}
 }
 
-void HelloTriangle::CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiliing,
-	VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
+void HelloTriangle::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkFormat format,
+                                VkImageTiling tiliing, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
 {
 	VkImageCreateInfo imageInfo{};
 	{
@@ -1613,7 +1614,7 @@ void HelloTriangle::CreateImage(uint32_t width, uint32_t height, VkFormat format
 		imageInfo.extent.width = static_cast<uint32_t>(width);
 		imageInfo.extent.height = static_cast<uint32_t>(height);
 		imageInfo.extent.depth = 1;
-		imageInfo.mipLevels = 1;
+		imageInfo.mipLevels = mipLevels;
 		imageInfo.arrayLayers = 1;
 		imageInfo.format = format;
 		imageInfo.tiling = tiliing;
@@ -1649,12 +1650,24 @@ void HelloTriangle::CreateTextureImage()
 	stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 
 	VkDeviceSize imageSize = texWidth * texHeight * 4;	// Multiply by 4 for each channel RGBA
-
+	
+	// Calculate mip levels
+	{
+		// Find largest dimension
+		auto maxDimension = std::max(texWidth, texHeight);
+		// Determine how many times the dimension can be divided by 2
+		auto divisibleBy2 = std::log2(maxDimension);
+		// Make sure result is a power of 2
+		auto mipLevels= std::floor(divisibleBy2);
+		// Add 1 so the original image has a mip level
+		m_mipLevels = static_cast<uint32_t>(mipLevels + 1);
+	}
+	
 	if (!pixels)
 	{
 		ASSERT(false, "Failed to load texture image");
 	}
-
+	
 	// Create buffer
 	VkBuffer stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
@@ -1678,27 +1691,31 @@ void HelloTriangle::CreateTextureImage()
 
 	// Create the image
 	CreateImage(texWidth, 
-				texHeight, 
-				VK_FORMAT_R8G8B8A8_SRGB, 
-				VK_IMAGE_TILING_OPTIMAL, 
-				VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 
-				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
-				m_textureImage, 
+	            texHeight,
+	            m_mipLevels, 
+	            VK_FORMAT_R8G8B8A8_SRGB, 
+	            VK_IMAGE_TILING_OPTIMAL, 
+			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+	            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
+	            m_textureImage, 
 				m_textureImageMemory);
 
 	// Copy the staging buffer to the image
-	TransitionImageLayout(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	TransitionImageLayout(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, m_mipLevels);
 	CopyBufferToImage(stagingBuffer, m_textureImage, texWidth, texHeight);
 
 	// Transition to read to be able to sample from
-	TransitionImageLayout(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	// Generating mipmaps transitions the layout to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL.
+	//TransitionImageLayout(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_mipLevels);
 
 	vkDestroyBuffer(m_device, stagingBuffer, nullptr);
 	vkFreeMemory(m_device	, stagingBufferMemory, nullptr);
+	
+	GenerateMipmaps(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, texWidth, texHeight, m_mipLevels);
 }
 
 void HelloTriangle::TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout,
-	VkImageLayout newLayout)
+                                          VkImageLayout newLayout, uint32_t mipLevels)
 {
 	// Transition image from old layout to new layout
 
@@ -1719,7 +1736,7 @@ void HelloTriangle::TransitionImageLayout(VkImage image, VkFormat format, VkImag
 		// Which part of the image are we syncing
 		{
 			barrier.subresourceRange.baseMipLevel = 0;
-			barrier.subresourceRange.levelCount = 1;
+			barrier.subresourceRange.levelCount = mipLevels;
 			barrier.subresourceRange.baseArrayLayer = 0;
 			barrier.subresourceRange.layerCount = 1;
 
@@ -1737,9 +1754,6 @@ void HelloTriangle::TransitionImageLayout(VkImage image, VkFormat format, VkImag
 				barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			}
 		}
-		
-		barrier.srcAccessMask = 0; // todo
-		barrier.dstAccessMask= 0; // todo
 	}
 
 	VkPipelineStageFlags sourceStage;
@@ -1793,7 +1807,7 @@ void HelloTriangle::TransitionImageLayout(VkImage image, VkFormat format, VkImag
 	EndSingleTimeCommands(commandBuffer);
 }
 
-VkImageView HelloTriangle::CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags)
+VkImageView HelloTriangle::CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels)
 {
 	VkImageViewCreateInfo viewInfo{};
 	{
@@ -1818,7 +1832,7 @@ VkImageView HelloTriangle::CreateImageView(VkImage image, VkFormat format, VkIma
 		{
 			viewInfo.subresourceRange.aspectMask = aspectFlags;
 			viewInfo.subresourceRange.baseMipLevel = 0;
-			viewInfo.subresourceRange.levelCount = 1;
+			viewInfo.subresourceRange.levelCount = mipLevels;
 			viewInfo.subresourceRange.baseArrayLayer = 0;
 			viewInfo.subresourceRange.layerCount = 1;
 		}
@@ -1833,7 +1847,7 @@ VkImageView HelloTriangle::CreateImageView(VkImage image, VkFormat format, VkIma
 void HelloTriangle::CreateTextureImageView()
 {
 	// Create a view in order to access images just like with the swap chain.
-	m_textureImageView = CreateImageView(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
+	m_textureImageView = CreateImageView(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, m_mipLevels);
 }
 
 void HelloTriangle::CreateTextureSampler()
@@ -1885,7 +1899,7 @@ void HelloTriangle::CreateTextureSampler()
 		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 		samplerInfo.mipLodBias = 0.0f;
 		samplerInfo.minLod = 0.0f;
-		samplerInfo.maxLod = 0.0f;
+		samplerInfo.maxLod = static_cast<float>(m_mipLevels);
 	}
 
 	// The sampler is distinct from the image. The sampler is a way to get data from a texture so we don't need to ref the image here.
@@ -1893,22 +1907,156 @@ void HelloTriangle::CreateTextureSampler()
 	VK_ASSERT(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_textureSampler), "Couldn't create texture sampler");
 }
 
+void HelloTriangle::GenerateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels)
+{
+	// Check if format supports linear blitting. Not all platforms support this.
+	VkFormatProperties formatProperties;
+	vkGetPhysicalDeviceFormatProperties(m_physicalDevice, imageFormat, &formatProperties);
+
+	if (!(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT))
+	{
+		throw std::runtime_error("No support for linear blitting");
+	}
+	
+	VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
+
+	VkImageMemoryBarrier barrier{};
+	{
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.image = image;
+		barrier.srcQueueFamilyIndex	= VK_QUEUE_FAMILY_IGNORED;
+		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange.baseArrayLayer = 0;
+		barrier.subresourceRange.layerCount = 1;
+		barrier.subresourceRange.levelCount = 1;
+	}
+
+	auto mipWidth = texWidth;
+	auto mipHeight = texHeight;
+
+	for (uint32_t i = 1; i < mipLevels; ++i)
+	{
+		auto currentMipLevel = i - 1;
+		auto nextMipLevel = i;
+		
+		barrier.subresourceRange.baseMipLevel = currentMipLevel;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+		vkCmdPipelineBarrier(
+			commandBuffer, 
+			VK_PIPELINE_STAGE_TRANSFER_BIT, 
+			VK_PIPELINE_STAGE_TRANSFER_BIT, 
+			0, 
+			0, 
+			nullptr, 
+			0, 
+			nullptr, 
+			1, 
+			&barrier);
+
+		// Transition current mip level to VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+		VkImageBlit blit{};
+		{
+			// Specify regions of the blit.
+
+			{
+				blit.srcOffsets[0] = {0,0,0};
+				blit.srcOffsets[1] = {mipWidth, mipHeight, 1};
+				blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				blit.srcSubresource.mipLevel = currentMipLevel;
+				blit.srcSubresource.baseArrayLayer = 0;
+				blit.srcSubresource.layerCount = 1;
+			}
+
+			{
+				blit.dstOffsets[0] = {0,0,0};
+				blit.dstOffsets[1] = {
+					mipWidth > 1 ? mipWidth / 2 : 1,		// Divide by two since each mip level is half the previous.
+					mipHeight > 1 ? mipHeight / 2 : 1,
+					1
+				};
+				blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				blit.dstSubresource.mipLevel = nextMipLevel;
+				blit.dstSubresource.baseArrayLayer = 0;
+				blit.dstSubresource.layerCount = 1;
+			}
+		}
+
+		// Blitting between different levels of the same image, source and destination are the same.
+		vkCmdBlitImage(
+			commandBuffer,
+			image,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			image,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			1,
+			&blit,
+			VK_FILTER_LINEAR);
+
+		// Transition from current mip level to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		{
+			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+			vkCmdPipelineBarrier(
+				commandBuffer,
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+				0,
+				0, nullptr,
+				0, nullptr,
+				1, &barrier);
+		}
+
+		if (mipWidth > 1)
+			mipWidth /= 2;
+		if (mipHeight > 1)
+			mipHeight /= 2;
+	}
+
+	// Transition the last mip level.
+	{
+		barrier.subresourceRange.baseMipLevel = mipLevels - 1;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+		vkCmdPipelineBarrier(
+			commandBuffer,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			0,
+			0, nullptr,
+			0, nullptr,
+			1, &barrier);
+	}
+
+	EndSingleTimeCommands(commandBuffer);
+}
+
 void HelloTriangle::CreateDepthResources()
 {
 	VkFormat depthFormat = FindDepthFormat();
 
 	CreateImage(	m_swapChainExtent.width, 
-					m_swapChainExtent.height, 
-					depthFormat, 
-					VK_IMAGE_TILING_OPTIMAL, 
-					VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-					VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
-					m_depthImage, 
-					m_depthImageMemory);
+	                m_swapChainExtent.height,
+	                1, 
+	                depthFormat, 
+	                VK_IMAGE_TILING_OPTIMAL,
+	                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 
+	                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
+	                m_depthImage, m_depthImageMemory);
 
-	m_depthImageView = CreateImageView(m_depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+	m_depthImageView = CreateImageView(m_depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 
-	TransitionImageLayout(m_depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+	TransitionImageLayout(m_depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
 }
 
 VkFormat HelloTriangle::FindDepthFormat()
