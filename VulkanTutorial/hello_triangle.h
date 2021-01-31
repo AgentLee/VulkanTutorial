@@ -108,7 +108,7 @@ private:
 
 	void CreateSyncObjects();
 
-	void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkFormat format, VkImageTiling tiliing, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+	void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiliing, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 	void CreateTextureImage();
 	void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
 	VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
@@ -119,6 +119,9 @@ private:
 	void CreateDepthResources();
 	VkFormat FindDepthFormat();
 	bool HasStencilComponent(VkFormat format);
+
+	VkSampleCountFlagBits GetMaxUsableSampleCount();
+	void CreateColorResources();
 	
 public:
 	size_t NumSwapChainImages() { return m_swapChainImages.size(); }
@@ -179,6 +182,11 @@ private:
 	VkImage m_depthImage;
 	VkDeviceMemory m_depthImageMemory;
 	VkImageView m_depthImageView;
+
+	VkSampleCountFlagBits m_msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+	VkImage m_colorImage;
+	VkDeviceMemory m_colorImageMemory;
+	VkImageView m_colorImageView;
 	
 	size_t m_currentFrame = 0;
 

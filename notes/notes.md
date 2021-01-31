@@ -52,3 +52,6 @@ This is `lod = [mipLevels / 2, mipLevels]`
 ![](res/lod_0.png)
 
 Adding imgui controls would be ideal to test.
+
+## Multisampling
+![](res/multisampling_on.png)
