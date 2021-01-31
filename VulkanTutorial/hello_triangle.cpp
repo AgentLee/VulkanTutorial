@@ -1689,13 +1689,16 @@ void HelloTriangle::CreateTextureImage()
 	// We loaded everything into data so we can now clean up pixels.
 	stbi_image_free(pixels);
 
+	// With mipmapping enabled, source has to also be VK_IMAGE_USAGE_TRANSFER_SRC_BIT.
+	auto usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+	
 	// Create the image
 	CreateImage(texWidth, 
 	            texHeight,
 	            m_mipLevels, 
 	            VK_FORMAT_R8G8B8A8_SRGB, 
 	            VK_IMAGE_TILING_OPTIMAL, 
-			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+				usage,
 	            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
 	            m_textureImage, 
 				m_textureImageMemory);
@@ -1704,13 +1707,10 @@ void HelloTriangle::CreateTextureImage()
 	TransitionImageLayout(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, m_mipLevels);
 	CopyBufferToImage(stagingBuffer, m_textureImage, texWidth, texHeight);
 
-	// Transition to read to be able to sample from
-	// Generating mipmaps transitions the layout to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL.
-	//TransitionImageLayout(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_mipLevels);
-
 	vkDestroyBuffer(m_device, stagingBuffer, nullptr);
 	vkFreeMemory(m_device	, stagingBufferMemory, nullptr);
 	
+	// Generating mipmaps transitions the layout to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL.
 	GenerateMipmaps(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, texWidth, texHeight, m_mipLevels);
 }
 
