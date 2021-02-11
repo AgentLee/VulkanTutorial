@@ -30,10 +30,3 @@ const bool g_enableValidationLayers = true;
 #else
 #define SELECT_BEST_DEVICE
 #endif
-
-struct UniformBufferObject
-{
-	glm::mat4 model;
-	glm::mat4 view;
-	glm::mat4 proj;
-};

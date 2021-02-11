@@ -1,5 +1,14 @@
+#pragma once
+
+#include "libs/imgui/imgui.h"
+#include "libs/imgui/imgui_impl_glfw.h"
+#include "libs/imgui/imgui_impl_vulkan.h"
+
+#define GLFW_INCLUDE_NONE
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+
+#include <vulkan/vulkan.h>
 
 #include <iostream>
 #include <stdexcept>
@@ -22,6 +31,9 @@ public:
 	
 private:
 	void InitWindow();
+	void InitImGui();
+	void FrameRender();
+	void FramePresent();
 	void MainLoop();
 	void DrawFrame();
 	void Cleanup();
@@ -29,6 +41,7 @@ private:
 	void LoadModel();
 	
 	void InitVulkan();
+
 	
 	void CreateInstance();
 
@@ -146,6 +159,8 @@ private:
 	VkPipelineLayout m_pipelineLayout;
 	VkPipeline m_graphicsPipeline;
 
+	VkRenderPass m_imGuiRenderPass;
+	
 	// Manage the memory being used to store/allocate buffers.
 	// Write all the ops you want into the command buffer then
 	// tell Vulkan which commands to execute.
@@ -154,6 +169,22 @@ private:
 	VkDescriptorPool m_descriptorPool;
 	std::vector<VkDescriptorSet> m_descriptorSets;
 
+	// IMGUI
+	//VkDescriptorPoolSize m_imGuiDescriptorPoolSizes[] =
+	//{
+	//	{ VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+	//	{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+	//	{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+	//	{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+	//	{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+	//	{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+	//	{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+	//	{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+	//	{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+	//	{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+	//	{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+	//};
+	
 	// One sem to signal acquisition and another to signal rendering finished for present. 
 	std::vector<VkSemaphore> m_imageAvailableSemaphores, m_renderFinishedSemaphores;
 	// CPU-GPU sync

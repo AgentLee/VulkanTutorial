@@ -9,11 +9,21 @@
 #ifndef GLM_ENABLE_EXPERIMENTAL
 #define GLM_ENABLE_EXPERIMENTAL
 #endif
+#ifndef GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+#endif
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/hash.hpp>
 
 #include <array>
+
+struct UniformBufferObject
+{
+	alignas(16) glm::mat4 model;
+	alignas(16) glm::mat4 view;
+	alignas(16) glm::mat4 proj;
+};
 
 class Vertex
 {
