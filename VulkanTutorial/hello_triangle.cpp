@@ -21,7 +21,7 @@
 #include "libs/imgui/imgui_impl_glfw.h"
 #include "libs/imgui/imgui_impl_vulkan.h"
 
-#define IMGUI_ENABLED false
+#define IMGUI_ENABLED true
 
 void HelloTriangle::Run()
 {
@@ -33,6 +33,7 @@ void HelloTriangle::Run()
 #endif
 
 	MainLoop();
+
 	Cleanup();
 }
 
@@ -110,7 +111,7 @@ void HelloTriangle::DrawFrame()
 			info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 			info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 		}
-		VK_ASSERT(vkBeginCommandBuffer(m_imguiCommandBuffers[m_currentFrame], &info), "");
+		VK_ASSERT(vkBeginCommandBuffer(m_imguiCommandBuffers[imageIndex], &info), "");
 
 		std::array<VkClearValue, 1> clearValues{};
 		{
@@ -125,20 +126,20 @@ void HelloTriangle::DrawFrame()
 		renderpassinfo.renderArea.extent.height = m_swapChainExtent.height;
 		renderpassinfo.clearValueCount = 1;
 		renderpassinfo.pClearValues = clearValues.data();
-		vkCmdBeginRenderPass(m_imguiCommandBuffers[m_currentFrame], &renderpassinfo, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBeginRenderPass(m_imguiCommandBuffers[imageIndex], &renderpassinfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_imguiCommandBuffers[m_currentFrame]);
+		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_imguiCommandBuffers[imageIndex]);
 
-		vkCmdEndRenderPass(m_imguiCommandBuffers[m_currentFrame]);
-		VK_ASSERT(vkEndCommandBuffer(m_imguiCommandBuffers[m_currentFrame]), "");
+		vkCmdEndRenderPass(m_imguiCommandBuffers[imageIndex]);
+		VK_ASSERT(vkEndCommandBuffer(m_imguiCommandBuffers[imageIndex]), "");
 	}
 #endif
 
 #if IMGUI_ENABLED
 	std::array<VkCommandBuffer, 2> submitCommandBuffers =
 	{
-		m_commandBuffers[m_currentFrame],
-		m_imguiCommandBuffers[m_currentFrame]
+		m_commandBuffers[imageIndex],
+		m_imguiCommandBuffers[imageIndex]
 	};
 #else
 	std::array<VkCommandBuffer, 1> submitCommandBuffers =
@@ -1274,7 +1275,7 @@ void HelloTriangle::CreateRenderPass()
 		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 		VK_ATTACHMENT_STORE_OP_DONT_CARE,
 		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 	);
 
 	// Subpasses - passes that rely on the previous pass.
