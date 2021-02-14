@@ -32,8 +32,6 @@ public:
 private:
 	void InitWindow();
 	void InitImGui();
-	void FrameRender();
-	void FramePresent();
 	void MainLoop();
 	void DrawFrame();
 	void Cleanup();
@@ -41,7 +39,6 @@ private:
 	void LoadModel();
 	
 	void InitVulkan();
-
 	
 	void CreateInstance();
 
@@ -98,6 +95,7 @@ private:
 	VkShaderModule CreateShaderModule(const std::vector<char>& code);
 
 	void CreateRenderPass();
+	void CreateImGuiRenderPass();
 
 	void CreateFrameBuffers();
 
@@ -110,12 +108,16 @@ private:
 	void CreateVertexBuffer();
 	void CreateIndexBuffer();
 	void CreateUniformBuffers();
-	void CreateDescriptorPool();
+	void CreateDescriptorPools();
+	void CreateMainDescriptorPool();
+	void CreateImGuiDescriptorPool();
 	void CreateDescriptorSets();
 	void UpdateUniformBuffers(uint32_t currentImage);
 	uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
 	void CreateCommandBuffers();
+	void CreateCommandBuffers(VkCommandBuffer* commandBuffer, uint32_t commandBufferCount, VkCommandPool& commandPool);
+	void CreateImGuiCommandBuffers();
 	VkCommandBuffer BeginSingleTimeCommands();
 	void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 
@@ -159,8 +161,6 @@ private:
 	VkPipelineLayout m_pipelineLayout;
 	VkPipeline m_graphicsPipeline;
 
-	VkRenderPass m_imGuiRenderPass;
-	
 	// Manage the memory being used to store/allocate buffers.
 	// Write all the ops you want into the command buffer then
 	// tell Vulkan which commands to execute.
@@ -168,22 +168,6 @@ private:
 	std::vector<VkCommandBuffer> m_commandBuffers;
 	VkDescriptorPool m_descriptorPool;
 	std::vector<VkDescriptorSet> m_descriptorSets;
-
-	// IMGUI
-	//VkDescriptorPoolSize m_imGuiDescriptorPoolSizes[] =
-	//{
-	//	{ VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-	//	{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
-	//	{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
-	//	{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
-	//	{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
-	//	{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
-	//	{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
-	//	{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
-	//	{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-	//	{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-	//	{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
-	//};
 	
 	// One sem to signal acquisition and another to signal rendering finished for present. 
 	std::vector<VkSemaphore> m_imageAvailableSemaphores, m_renderFinishedSemaphores;
@@ -224,6 +208,14 @@ private:
 	bool frameBufferResized = false;
 	
 	GLFWwindow* m_window;
+
+	// IMGUI
+	VkDescriptorPool m_imguiDescriptorPool;
+	std::vector<VkDescriptorSet> m_imguiDescriptorSets;
+	VkRenderPass m_imguiRenderPass;
+	VkCommandPool m_imguiCommandPool;
+	std::vector<VkCommandBuffer> m_imguiCommandBuffers;
+	std::vector<VkFramebuffer> m_imguiFrameBuffers;
 
 private:
 	std::vector<Vertex> m_vertices;

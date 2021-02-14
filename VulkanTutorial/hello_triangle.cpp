@@ -25,6 +25,7 @@ void HelloTriangle::Run()
 {
 	InitWindow();
 	InitVulkan();
+	InitImGui();
 	MainLoop();
 	Cleanup();
 }
@@ -42,6 +43,13 @@ void HelloTriangle::MainLoop()
 
 void HelloTriangle::DrawFrame()
 {
+	// Start the Dear ImGui frame
+	ImGui_ImplVulkan_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+	ImGui::ShowDemoWindow();
+	ImGui::Render();
+	
 	// -Get image from swap chain
 	// -Execute command buffer with the image as an attachment in the frame buffer
 	// -Return the image to the swap chain to present
@@ -84,6 +92,63 @@ void HelloTriangle::DrawFrame()
 	// Update uniforms
 	UpdateUniformBuffers(imageIndex);
 
+	// Submit ImGui commands
+	{
+		VK_ASSERT(vkResetCommandPool(m_device, m_imguiCommandPool, 0), "");
+
+		VkCommandBufferBeginInfo info = {};
+		{
+			info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+			info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+		}
+		VK_ASSERT(vkBeginCommandBuffer(m_imguiCommandBuffers[m_currentFrame], &info), "");
+
+		std::array<VkClearValue, 1> clearValues{};
+		{
+			clearValues[0].color = { 1, 0, 0, 1 };
+		}
+
+		{
+			VkImageView attachment[1];
+			VkFramebufferCreateInfo info = {};
+			info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			info.renderPass = m_imguiRenderPass;
+			info.attachmentCount = 1;
+			info.pAttachments = attachment;
+			info.width = m_swapChainExtent.width;
+			info.height = m_swapChainExtent.height;
+			info.layers = 1;
+			for (uint32_t i = 0; i < m_swapChainImageViews.size(); i++)
+			{
+				attachment[0] = m_swapChainImageViews[i];
+				VK_ASSERT(vkCreateFramebuffer(m_device, &info, nullptr, &m_imguiFrameBuffers[i]), "");
+			}
+		}
+
+		VkRenderPassBeginInfo renderpassinfo = {};
+		renderpassinfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderpassinfo.renderPass = m_imguiRenderPass;
+		renderpassinfo.framebuffer = m_imguiFrameBuffers[imageIndex];
+		renderpassinfo.renderArea.extent.width = m_swapChainExtent.width;
+		renderpassinfo.renderArea.extent.height = m_swapChainExtent.height;
+		renderpassinfo.clearValueCount = 1;
+		renderpassinfo.pClearValues = clearValues.data();
+		vkCmdBeginRenderPass(m_imguiCommandBuffers[m_currentFrame], &renderpassinfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		
+
+		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_imguiCommandBuffers[m_currentFrame]);
+
+		vkCmdEndRenderPass(m_imguiCommandBuffers[m_currentFrame]);
+		VK_ASSERT(vkEndCommandBuffer(m_imguiCommandBuffers[m_currentFrame]), "");
+	}
+
+	std::array<VkCommandBuffer, 2> submitCommandBuffers =
+	{
+		m_commandBuffers[imageIndex],
+		m_imguiCommandBuffers[imageIndex]
+	};
+	
 	// Submit command buffer
 	VkSubmitInfo submitInfo{};
 	{
@@ -101,8 +166,8 @@ void HelloTriangle::DrawFrame()
 		// Specify which command buffers to submit for execution.
 		// We want to submit the buffer that binds the swap chain image we acquired as color attachment.
 		{
-			submitInfo.commandBufferCount = 1;
-			submitInfo.pCommandBuffers = &m_commandBuffers[imageIndex];
+			submitInfo.commandBufferCount = submitCommandBuffers.size();
+			submitInfo.pCommandBuffers = submitCommandBuffers.data();
 		}
 
 		// Specify which semaphores to signal after execution.
@@ -115,7 +180,7 @@ void HelloTriangle::DrawFrame()
 
 		VK_ASSERT(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[m_currentFrame]), "Failed to submit draw command buffer");
 	}
-
+	
 	// Present
 	// Submit result back to swap chain to show on screen.
 
@@ -187,52 +252,53 @@ void HelloTriangle::InitImGui()
 	ImGui::StyleColorsDark();
 	//ImGui::StyleColorsClassic();
 
-	bool init = ImGui_ImplGlfw_InitForVulkan(m_window, true);
-	if (!init)
-		throw std::runtime_error("Couldn't init ImGui");
+	// Setup Platform/Renderer bindings
+	ImGui_ImplGlfw_InitForVulkan(m_window, true);
 
-	auto queueFamilies = FindQueueFamilies(m_physicalDevice);
-	
-	ImGui_ImplVulkan_InitInfo initInfo = {};
+	auto queueFamily = FindQueueFamilies(m_physicalDevice);
+	auto swapChainSupport = QuerySwapChainSupport(m_physicalDevice);
+
+	ImGui_ImplVulkan_InitInfo init_info = {};
 	{
-		initInfo.Instance = m_instance;
-		initInfo.PhysicalDevice = m_physicalDevice;
-		initInfo.Device = m_device;
-		initInfo.QueueFamily = queueFamilies.graphicsFamily.value();	// negligible?
-		initInfo.Queue = m_graphicsQueue;
-		initInfo.PipelineCache = nullptr;
-		initInfo.DescriptorPool = m_descriptorPool;		// might need to change this.
-		initInfo.Allocator = nullptr;
-		initInfo.MinImageCount = 1;
-		initInfo.ImageCount = NumSwapChainImages();
-		//initInfo.CheckVkResultFn 
+		init_info.Instance = m_instance;
+		init_info.PhysicalDevice = m_physicalDevice;
+		init_info.Device = m_device;
+		init_info.QueueFamily = queueFamily.graphicsFamily.value();
+		init_info.Queue = m_graphicsQueue;
+		init_info.PipelineCache = nullptr;
+		init_info.DescriptorPool = m_imguiDescriptorPool;
+		init_info.Allocator = nullptr;
+		init_info.MinImageCount = swapChainSupport.capabilities.minImageCount + 1;
+		init_info.ImageCount = NumSwapChainImages();
+		init_info.CheckVkResultFn = nullptr;
+	}
+	ImGui_ImplVulkan_Init(&init_info, m_imguiRenderPass);
+
+	// Upload Fonts
+	{
+		// Use any command queue
+		VkCommandPool command_pool = m_imguiCommandPool;
+		VkCommandBuffer command_buffer = m_imguiCommandBuffers[m_currentFrame];
+
+		VkCommandBufferBeginInfo begin_info = {};
+		begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+		vkBeginCommandBuffer(command_buffer, &begin_info);
+
+		ImGui_ImplVulkan_CreateFontsTexture(command_buffer);
+
+		VkSubmitInfo end_info = {};
+		end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		end_info.commandBufferCount = 1;
+		end_info.pCommandBuffers = &command_buffer;
+		vkEndCommandBuffer(command_buffer);
+		vkQueueSubmit(m_graphicsQueue, 1, &end_info, VK_NULL_HANDLE);
+
+		vkDeviceWaitIdle(m_device);
+		ImGui_ImplVulkan_DestroyFontUploadObjects();
 	}
 
-	ImGui_ImplVulkan_Init(&initInfo, m_renderPass);
-
-	{
-        // Use any command queue
-        VkCommandPool command_pool = m_commandPool;
-        VkCommandBuffer command_buffer = m_commandBuffers[0];
-
-        vkResetCommandPool(m_device, command_pool, 0);
-        VkCommandBufferBeginInfo begin_info = {};
-        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        vkBeginCommandBuffer(command_buffer, &begin_info);
-
-        ImGui_ImplVulkan_CreateFontsTexture(command_buffer);
-
-        VkSubmitInfo end_info = {};
-        end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        end_info.commandBufferCount = 1;
-        end_info.pCommandBuffers = &command_buffer;
-        vkEndCommandBuffer(command_buffer);
-        vkQueueSubmit(m_graphicsQueue, 1, &end_info, VK_NULL_HANDLE);
-
-        vkDeviceWaitIdle(m_device);
-        ImGui_ImplVulkan_DestroyFontUploadObjects();
-    }
+	ImGui_ImplVulkan_DestroyFontUploadObjects();
 }
 
 void HelloTriangle::InitVulkan()
@@ -245,6 +311,7 @@ void HelloTriangle::InitVulkan()
 	CreateSwapChain();
 	CreateImageViews();
 	CreateRenderPass();
+	CreateImGuiRenderPass();
 	CreateDescriptorSetLayout();
 	CreateGraphicsPipeline();
 	CreateCommandPool();
@@ -258,9 +325,10 @@ void HelloTriangle::InitVulkan()
 	CreateVertexBuffer();
 	CreateIndexBuffer();
 	CreateUniformBuffers();
-	CreateDescriptorPool();
+	CreateDescriptorPools();
 	CreateDescriptorSets();
 	CreateCommandBuffers();
+	CreateImGuiCommandBuffers();
 	CreateSyncObjects();
 }
 
@@ -835,14 +903,16 @@ void HelloTriangle::RecreateSwapChain()
 	CreateSwapChain();
 	CreateImageViews();
 	CreateRenderPass();
+	CreateImGuiRenderPass();
 	CreateGraphicsPipeline();
 	CreateColorResources();
 	CreateDepthResources();
 	CreateFrameBuffers();
 	CreateUniformBuffers();
-	CreateDescriptorPool();
+	CreateDescriptorPools();
 	CreateDescriptorSets();
 	CreateCommandBuffers();
+	CreateImGuiCommandBuffers();
 }
 
 void HelloTriangle::CreateImageViews()
@@ -1199,21 +1269,7 @@ void HelloTriangle::CreateRenderPass()
 		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 		VK_ATTACHMENT_STORE_OP_DONT_CARE,
 		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-	);
-
-	VkAttachmentDescription imguiAttachment{};
-	CreateAttachmentDescription(
-		imguiAttachment,
-		m_swapChainImageFormat,
-		0,
-		VK_SAMPLE_COUNT_1_BIT,
-		VK_ATTACHMENT_LOAD_OP_LOAD,
-		VK_ATTACHMENT_STORE_OP_STORE,
-		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-		VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 	);
 
 	// Subpasses - passes that rely on the previous pass.
@@ -1226,12 +1282,9 @@ void HelloTriangle::CreateRenderPass()
 	VkAttachmentReference colorAttachmentResolveRef{};
 	CreateAttachmentReference(colorAttachmentResolveRef, 2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-	VkAttachmentReference imguiAttachmentRef{};
-	CreateAttachmentReference(imguiAttachmentRef, 3, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	
-	std::array<VkAttachmentReference, 2> colorAttachments = {
+	std::array<VkAttachmentReference, 1> colorAttachments = {
 		colorAttachmentRef,
-		imguiAttachmentRef
+		//imguiAttachmentRef
 	};
 
 	VkSubpassDescription subpass{};
@@ -1259,11 +1312,11 @@ void HelloTriangle::CreateRenderPass()
 		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
 	);
 
-	std::array<VkAttachmentDescription, 4> attachments = {
+	std::array<VkAttachmentDescription, 3> attachments = {
 		colorAttachment,
 		depthAttachment,
 		colorAttachmentResolve,
-		imguiAttachment
+		//imguiAttachment
 	};
 
 	// Create the render pass
@@ -1281,11 +1334,71 @@ void HelloTriangle::CreateRenderPass()
 	VK_ASSERT(vkCreateRenderPass(m_device, &renderPassInfo, nullptr, &m_renderPass), "Failed to create render pass");
 }
 
+void HelloTriangle::CreateImGuiRenderPass()
+{
+	VkAttachmentDescription imguiAttachment{};
+	CreateAttachmentDescription(
+		imguiAttachment,
+		m_swapChainImageFormat,
+		0,
+		VK_SAMPLE_COUNT_1_BIT,
+		VK_ATTACHMENT_LOAD_OP_LOAD,
+		VK_ATTACHMENT_STORE_OP_STORE,
+		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+	);
+
+	VkAttachmentReference imguiAttachmentRef{};
+	CreateAttachmentReference(imguiAttachmentRef, 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+	VkSubpassDescription subpass{};
+	{
+		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+		subpass.colorAttachmentCount = 1;
+		subpass.pColorAttachments = &imguiAttachmentRef;
+		subpass.pDepthStencilAttachment = nullptr;
+		subpass.pResolveAttachments = nullptr;
+	}
+
+	VkSubpassDependency dependency{};
+	CreateSubpassDependency(
+		dependency,
+		0,
+		VK_SUBPASS_EXTERNAL,
+		0,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		0,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+	);
+
+	std::array<VkAttachmentDescription, 1> attachments = {
+		imguiAttachment
+	};
+
+	// Create the render pass
+	VkRenderPassCreateInfo renderPassInfo{};
+	{
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+		renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+		renderPassInfo.pAttachments = attachments.data();
+		renderPassInfo.subpassCount = 1;
+		renderPassInfo.pSubpasses = &subpass;
+		renderPassInfo.dependencyCount = 1;
+		renderPassInfo.pDependencies = &dependency;
+	}
+
+	VK_ASSERT(vkCreateRenderPass(m_device, &renderPassInfo, nullptr, &m_imguiRenderPass), "Failed to create render pass");
+}
+
 void HelloTriangle::CreateFrameBuffers()
 {
 	// Each FBO will need to reference each of the image view objects.
 
 	m_swapChainFrameBuffers.resize(m_swapChainImageViews.size());
+	m_imguiFrameBuffers.resize(m_swapChainImageViews.size());
 
 	// Iterate over all of the views to create a frame buffer for them.
 	for (auto i = 0; i < m_swapChainImageViews.size(); ++i)
@@ -1545,7 +1658,13 @@ void HelloTriangle::CreateUniformBuffers()
 	}
 }
 
-void HelloTriangle::CreateDescriptorPool()
+void HelloTriangle::CreateDescriptorPools()
+{
+	CreateMainDescriptorPool();
+	CreateImGuiDescriptorPool();
+}
+
+void HelloTriangle::CreateMainDescriptorPool()
 {
 	// Descriptor sets must be allocated from a command pool.
 	
@@ -1558,16 +1677,27 @@ void HelloTriangle::CreateDescriptorPool()
 	}
 
 	// Allocate one descriptor every frame.
-	VkDescriptorPoolCreateInfo poolInfo{};
-	{
-		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-		poolInfo.pPoolSizes = poolSizes.data();
-		poolInfo.maxSets = static_cast<uint32_t>(m_swapChainImages.size());	// Max number of sets to be allocated
-	}
+	CreateDescriptorPool(m_device, &m_descriptorPool, poolSizes.data(), static_cast<uint32_t>(poolSizes.size()), static_cast<uint32_t>(NumSwapChainImages()));
+}
 
-	// Create descriptor pool
-	VK_ASSERT(vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool), "Failed to create descriptor pool");
+void HelloTriangle::CreateImGuiDescriptorPool()
+{
+	VkDescriptorPoolSize poolSizes[] =
+	{
+		{ VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+	};
+
+	CreateDescriptorPool(m_device, &m_imguiDescriptorPool, poolSizes, 11, static_cast<uint32_t>(NumSwapChainImages()));
 }
 
 void HelloTriangle::CreateDescriptorSets()
@@ -1736,6 +1866,34 @@ void HelloTriangle::CreateCommandBuffers()
 
 		VK_ASSERT(vkEndCommandBuffer(m_commandBuffers[i]), "Failed to record command buffer");
 	}
+}
+
+//https://frguthmann.github.io/posts/vulkan_imgui/
+void HelloTriangle::CreateCommandBuffers(VkCommandBuffer* commandBuffer, uint32_t commandBufferCount, VkCommandPool &commandPool) {
+	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
+	commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	commandBufferAllocateInfo.commandPool = commandPool;
+	commandBufferAllocateInfo.commandBufferCount = commandBufferCount;
+	vkAllocateCommandBuffers(m_device, &commandBufferAllocateInfo, commandBuffer);
+}
+
+void HelloTriangle::CreateImGuiCommandBuffers()
+{
+	auto index = FindQueueFamilies(m_physicalDevice);
+	
+	// todo: move to new function
+	VkCommandPoolCreateInfo commandPoolCreateInfo = {};
+	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	commandPoolCreateInfo.queueFamilyIndex = index.graphicsFamily.value();
+	commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+	if (vkCreateCommandPool(m_device, &commandPoolCreateInfo, nullptr, &m_imguiCommandPool) != VK_SUCCESS) {
+		throw std::runtime_error("Could not create graphics command pool");
+	}
+	
+	m_imguiCommandBuffers.resize(m_swapChainFrameBuffers.size());
+	CreateCommandBuffers(m_imguiCommandBuffers.data(), static_cast<uint32_t>(m_imguiCommandBuffers.size()), m_imguiCommandPool);
 }
 
 VkCommandBuffer HelloTriangle::BeginSingleTimeCommands()
@@ -2342,6 +2500,7 @@ void HelloTriangle::CleanupSwapChain()
 	vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
 	vkDestroyRenderPass(m_device, m_renderPass, nullptr);
+	vkDestroyRenderPass(m_device, m_imguiRenderPass, nullptr);
 
 	for (auto& imageView : m_swapChainImageViews)
 	{
@@ -2357,6 +2516,7 @@ void HelloTriangle::CleanupSwapChain()
 	}
 
 	vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr);
+	vkDestroyDescriptorPool(m_device, m_imguiDescriptorPool, nullptr);
 }
 
 void HelloTriangle::Cleanup()

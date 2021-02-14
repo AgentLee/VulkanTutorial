@@ -89,3 +89,17 @@ void CreateSubpassDependency(VkSubpassDependency& dependency, VkDependencyFlags 
 		dependency.dstAccessMask = dstAccessMask;
 	}
 }
+
+void CreateDescriptorPool(VkDevice device, VkDescriptorPool* descriptorPool, VkDescriptorPoolSize* poolSizes, uint32_t poolSizeCount, uint32_t maxSets)
+{
+	VkDescriptorPoolCreateInfo poolInfo{};
+	{
+		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		poolInfo.poolSizeCount = poolSizeCount;
+		poolInfo.pPoolSizes = poolSizes;
+		poolInfo.maxSets = maxSets;
+	}
+
+	// Create descriptor pool
+	VK_ASSERT(vkCreateDescriptorPool(device, &poolInfo, nullptr, descriptorPool), "Failed to create descriptor pool");
+}
