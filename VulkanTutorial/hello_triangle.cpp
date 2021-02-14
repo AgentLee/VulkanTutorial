@@ -21,11 +21,17 @@
 #include "libs/imgui/imgui_impl_glfw.h"
 #include "libs/imgui/imgui_impl_vulkan.h"
 
+#define IMGUI_ENABLED false
+
 void HelloTriangle::Run()
 {
 	InitWindow();
 	InitVulkan();
+	
+#if IMGUI_ENABLED
 	InitImGui();
+#endif
+
 	MainLoop();
 	Cleanup();
 }
@@ -43,12 +49,14 @@ void HelloTriangle::MainLoop()
 
 void HelloTriangle::DrawFrame()
 {
+#if IMGUI_ENABLED
 	// Start the Dear ImGui frame
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 	ImGui::ShowDemoWindow();
 	ImGui::Render();
+#endif
 	
 	// -Get image from swap chain
 	// -Execute command buffer with the image as an attachment in the frame buffer
@@ -92,6 +100,7 @@ void HelloTriangle::DrawFrame()
 	// Update uniforms
 	UpdateUniformBuffers(imageIndex);
 
+#if IMGUI_ENABLED
 	// Submit ImGui commands
 	{
 		VK_ASSERT(vkResetCommandPool(m_device, m_imguiCommandPool, 0), "");
@@ -108,23 +117,6 @@ void HelloTriangle::DrawFrame()
 			clearValues[0].color = { 1, 0, 0, 1 };
 		}
 
-		{
-			VkImageView attachment[1];
-			VkFramebufferCreateInfo info = {};
-			info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-			info.renderPass = m_imguiRenderPass;
-			info.attachmentCount = 1;
-			info.pAttachments = attachment;
-			info.width = m_swapChainExtent.width;
-			info.height = m_swapChainExtent.height;
-			info.layers = 1;
-			for (uint32_t i = 0; i < m_swapChainImageViews.size(); i++)
-			{
-				attachment[0] = m_swapChainImageViews[i];
-				VK_ASSERT(vkCreateFramebuffer(m_device, &info, nullptr, &m_imguiFrameBuffers[i]), "");
-			}
-		}
-
 		VkRenderPassBeginInfo renderpassinfo = {};
 		renderpassinfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		renderpassinfo.renderPass = m_imguiRenderPass;
@@ -135,19 +127,25 @@ void HelloTriangle::DrawFrame()
 		renderpassinfo.pClearValues = clearValues.data();
 		vkCmdBeginRenderPass(m_imguiCommandBuffers[m_currentFrame], &renderpassinfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		
-
 		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_imguiCommandBuffers[m_currentFrame]);
 
 		vkCmdEndRenderPass(m_imguiCommandBuffers[m_currentFrame]);
 		VK_ASSERT(vkEndCommandBuffer(m_imguiCommandBuffers[m_currentFrame]), "");
 	}
+#endif
 
+#if IMGUI_ENABLED
 	std::array<VkCommandBuffer, 2> submitCommandBuffers =
 	{
-		m_commandBuffers[imageIndex],
-		m_imguiCommandBuffers[imageIndex]
+		m_commandBuffers[m_currentFrame],
+		m_imguiCommandBuffers[m_currentFrame]
 	};
+#else
+	std::array<VkCommandBuffer, 1> submitCommandBuffers =
+	{
+		m_commandBuffers[imageIndex],
+	};
+#endif
 	
 	// Submit command buffer
 	VkSubmitInfo submitInfo{};
@@ -278,8 +276,10 @@ void HelloTriangle::InitImGui()
 	{
 		// Use any command queue
 		VkCommandPool command_pool = m_imguiCommandPool;
+		VK_ASSERT(vkResetCommandPool(m_device, command_pool, 0), "");
+		
 		VkCommandBuffer command_buffer = m_imguiCommandBuffers[m_currentFrame];
-
+		
 		VkCommandBufferBeginInfo begin_info = {};
 		begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -310,8 +310,7 @@ void HelloTriangle::InitVulkan()
 	CreateLogicalDevice();
 	CreateSwapChain();
 	CreateImageViews();
-	CreateRenderPass();
-	CreateImGuiRenderPass();
+	CreateRenderPasses();
 	CreateDescriptorSetLayout();
 	CreateGraphicsPipeline();
 	CreateCommandPool();
@@ -328,7 +327,6 @@ void HelloTriangle::InitVulkan()
 	CreateDescriptorPools();
 	CreateDescriptorSets();
 	CreateCommandBuffers();
-	CreateImGuiCommandBuffers();
 	CreateSyncObjects();
 }
 
@@ -902,8 +900,7 @@ void HelloTriangle::RecreateSwapChain()
 	
 	CreateSwapChain();
 	CreateImageViews();
-	CreateRenderPass();
-	CreateImGuiRenderPass();
+	CreateRenderPasses();
 	CreateGraphicsPipeline();
 	CreateColorResources();
 	CreateDepthResources();
@@ -912,7 +909,6 @@ void HelloTriangle::RecreateSwapChain()
 	CreateDescriptorPools();
 	CreateDescriptorSets();
 	CreateCommandBuffers();
-	CreateImGuiCommandBuffers();
 }
 
 void HelloTriangle::CreateImageViews()
@@ -1222,6 +1218,15 @@ VkShaderModule HelloTriangle::CreateShaderModule(const std::vector<char>& code)
 	return shaderModule;
 }
 
+void HelloTriangle::CreateRenderPasses()
+{
+	CreateRenderPass();
+	
+#if IMGUI_ENABLED
+	CreateImGuiRenderPass();
+#endif
+}
+
 void HelloTriangle::CreateRenderPass()
 {
 	// Tell Vulkan about the frame buffer attachments used for rendering.
@@ -1269,7 +1274,7 @@ void HelloTriangle::CreateRenderPass()
 		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 		VK_ATTACHMENT_STORE_OP_DONT_CARE,
 		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
 	);
 
 	// Subpasses - passes that rely on the previous pass.
@@ -1284,7 +1289,6 @@ void HelloTriangle::CreateRenderPass()
 
 	std::array<VkAttachmentReference, 1> colorAttachments = {
 		colorAttachmentRef,
-		//imguiAttachmentRef
 	};
 
 	VkSubpassDescription subpass{};
@@ -1316,7 +1320,6 @@ void HelloTriangle::CreateRenderPass()
 		colorAttachment,
 		depthAttachment,
 		colorAttachmentResolve,
-		//imguiAttachment
 	};
 
 	// Create the render pass
@@ -1425,6 +1428,25 @@ void HelloTriangle::CreateFrameBuffers()
 
 		VK_ASSERT(vkCreateFramebuffer(m_device, &frameBufferInfo, nullptr, &m_swapChainFrameBuffers[i]), "Failed to create frame buffer");
 	}
+
+#if IMGUI_ENABLED
+	{
+		VkImageView attachment[1];
+		VkFramebufferCreateInfo info = {};
+		info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		info.renderPass = m_imguiRenderPass;
+		info.attachmentCount = 1;
+		info.pAttachments = attachment;
+		info.width = m_swapChainExtent.width;
+		info.height = m_swapChainExtent.height;
+		info.layers = 1;
+		for (uint32_t i = 0; i < m_imguiFrameBuffers.size(); ++i)
+		{
+			attachment[0] = m_swapChainImageViews[i];
+			vkCreateFramebuffer(m_device, &info, nullptr, &m_imguiFrameBuffers[i]);
+		}
+	}
+#endif
 }
 
 void HelloTriangle::CreateCommandPool()
@@ -1661,7 +1683,10 @@ void HelloTriangle::CreateUniformBuffers()
 void HelloTriangle::CreateDescriptorPools()
 {
 	CreateMainDescriptorPool();
+
+#if IMGUI_ENABLED
 	CreateImGuiDescriptorPool();
+#endif
 }
 
 void HelloTriangle::CreateMainDescriptorPool()
@@ -1866,6 +1891,10 @@ void HelloTriangle::CreateCommandBuffers()
 
 		VK_ASSERT(vkEndCommandBuffer(m_commandBuffers[i]), "Failed to record command buffer");
 	}
+
+#if IMGUI_ENABLED
+	CreateImGuiCommandBuffers();
+#endif
 }
 
 //https://frguthmann.github.io/posts/vulkan_imgui/
@@ -2516,7 +2545,10 @@ void HelloTriangle::CleanupSwapChain()
 	}
 
 	vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr);
+
+#if IMGUI_ENABLED
 	vkDestroyDescriptorPool(m_device, m_imguiDescriptorPool, nullptr);
+#endif
 }
 
 void HelloTriangle::Cleanup()

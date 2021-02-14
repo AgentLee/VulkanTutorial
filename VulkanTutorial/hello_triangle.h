@@ -94,6 +94,7 @@ private:
 	void CreateGraphicsPipeline();
 	VkShaderModule CreateShaderModule(const std::vector<char>& code);
 
+	void CreateRenderPasses();
 	void CreateRenderPass();
 	void CreateImGuiRenderPass();
 
