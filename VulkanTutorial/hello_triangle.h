@@ -1,5 +1,14 @@
+#pragma once
+
+#include "libs/imgui/imgui.h"
+#include "libs/imgui/imgui_impl_glfw.h"
+#include "libs/imgui/imgui_impl_vulkan.h"
+
+#define GLFW_INCLUDE_NONE
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+
+#include <vulkan/vulkan.h>
 
 #include <iostream>
 #include <stdexcept>
@@ -22,6 +31,7 @@ public:
 	
 private:
 	void InitWindow();
+	void InitImGui();
 	void MainLoop();
 	void DrawFrame();
 	void Cleanup();
@@ -84,7 +94,9 @@ private:
 	void CreateGraphicsPipeline();
 	VkShaderModule CreateShaderModule(const std::vector<char>& code);
 
+	void CreateRenderPasses();
 	void CreateRenderPass();
+	void CreateImGuiRenderPass();
 
 	void CreateFrameBuffers();
 
@@ -97,12 +109,16 @@ private:
 	void CreateVertexBuffer();
 	void CreateIndexBuffer();
 	void CreateUniformBuffers();
-	void CreateDescriptorPool();
+	void CreateDescriptorPools();
+	void CreateMainDescriptorPool();
+	void CreateImGuiDescriptorPool();
 	void CreateDescriptorSets();
 	void UpdateUniformBuffers(uint32_t currentImage);
 	uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
 	void CreateCommandBuffers();
+	void CreateCommandBuffers(VkCommandBuffer* commandBuffer, uint32_t commandBufferCount, VkCommandPool& commandPool);
+	void CreateImGuiCommandBuffers();
 	VkCommandBuffer BeginSingleTimeCommands();
 	void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 
@@ -153,7 +169,7 @@ private:
 	std::vector<VkCommandBuffer> m_commandBuffers;
 	VkDescriptorPool m_descriptorPool;
 	std::vector<VkDescriptorSet> m_descriptorSets;
-
+	
 	// One sem to signal acquisition and another to signal rendering finished for present. 
 	std::vector<VkSemaphore> m_imageAvailableSemaphores, m_renderFinishedSemaphores;
 	// CPU-GPU sync
@@ -193,6 +209,14 @@ private:
 	bool frameBufferResized = false;
 	
 	GLFWwindow* m_window;
+
+	// IMGUI
+	VkDescriptorPool m_imguiDescriptorPool;
+	std::vector<VkDescriptorSet> m_imguiDescriptorSets;
+	VkRenderPass m_imguiRenderPass;
+	VkCommandPool m_imguiCommandPool;
+	std::vector<VkCommandBuffer> m_imguiCommandBuffers;
+	std::vector<VkFramebuffer> m_imguiFrameBuffers;
 
 private:
 	std::vector<Vertex> m_vertices;

@@ -1,4 +1,5 @@
 #include "hello_triangle.h"
+#include "vulkan_helper.h"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -17,12 +18,205 @@
 #include <algorithm>
 #include <unordered_map>
 
+#include "libs/imgui/imgui_impl_glfw.h"
+#include "libs/imgui/imgui_impl_vulkan.h"
+
+#define IMGUI_ENABLED true
+
 void HelloTriangle::Run()
 {
 	InitWindow();
 	InitVulkan();
+	
+#if IMGUI_ENABLED
+	InitImGui();
+#endif
+
 	MainLoop();
+
 	Cleanup();
+}
+
+void HelloTriangle::MainLoop()
+{
+	while (!glfwWindowShouldClose(m_window))
+	{
+		glfwPollEvents();
+		DrawFrame();
+	}
+
+	vkDeviceWaitIdle(m_device);
+}
+
+void HelloTriangle::DrawFrame()
+{
+#if IMGUI_ENABLED
+	// Start the Dear ImGui frame
+	ImGui_ImplVulkan_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+	ImGui::ShowDemoWindow();
+	ImGui::Render();
+#endif
+	
+	// -Get image from swap chain
+	// -Execute command buffer with the image as an attachment in the frame buffer
+	// -Return the image to the swap chain to present
+
+	// These events are asynchronous, we need to sync them up.
+	// Semaphores vs fences:
+	// -Fences used for syncing rendering
+	// -Semaphores used for syncing operations across command queues
+
+	vkWaitForFences(m_device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
+
+	uint32_t imageIndex;	// Store index of the image from the swap chain.
+	auto acquireResult = vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX, m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+	// If swap chain is out of date or suboptimal, recreate it.
+	if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR || acquireResult == VK_SUBOPTIMAL_KHR)
+	{
+		frameBufferResized = false;
+		RecreateSwapChain();
+
+#if IMGUI_ENABLED
+		// Should be more elegant than this
+		InitImGui();
+#endif
+		
+		return;
+	}
+	else if (acquireResult != VK_SUCCESS)
+	{
+		ASSERT(false, "Failed to acquire swap chain image");
+	}
+
+	// Check if previous frame is using this image (waiting on a fence)
+	if (m_imagesInFlight[imageIndex] != VK_NULL_HANDLE)
+	{
+		vkWaitForFences(m_device, 1, &m_imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+	}
+
+	// Mark image as being used
+	m_imagesInFlight[imageIndex] = m_inFlightFences[m_currentFrame];
+
+	VkSemaphore waitSemaphores[] = { m_imageAvailableSemaphores[m_currentFrame] };
+	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	VkSemaphore signalSemaphores[] = { m_renderFinishedSemaphores[m_currentFrame] };
+
+	// Update uniforms
+	UpdateUniformBuffers(imageIndex);
+
+#if IMGUI_ENABLED
+	// Submit ImGui commands
+	{
+		VK_ASSERT(vkResetCommandPool(m_device, m_imguiCommandPool, 0), "");
+
+		VkCommandBufferBeginInfo info = {};
+		{
+			info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+			info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+		}
+		VK_ASSERT(vkBeginCommandBuffer(m_imguiCommandBuffers[imageIndex], &info), "");
+
+		std::array<VkClearValue, 1> clearValues{};
+		{
+			clearValues[0].color = { 0.45f, 0.55f, 0.60f, 1.00f };
+		}
+
+		VkRenderPassBeginInfo renderpassinfo = {};
+		renderpassinfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderpassinfo.renderPass = m_imguiRenderPass;
+		renderpassinfo.framebuffer = m_imguiFrameBuffers[imageIndex];
+		renderpassinfo.renderArea.extent.width = m_swapChainExtent.width;
+		renderpassinfo.renderArea.extent.height = m_swapChainExtent.height;
+		renderpassinfo.clearValueCount = 1;
+		renderpassinfo.pClearValues = clearValues.data();
+		vkCmdBeginRenderPass(m_imguiCommandBuffers[imageIndex], &renderpassinfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_imguiCommandBuffers[imageIndex]);
+
+		vkCmdEndRenderPass(m_imguiCommandBuffers[imageIndex]);
+		VK_ASSERT(vkEndCommandBuffer(m_imguiCommandBuffers[imageIndex]), "");
+	}
+#endif
+
+#if IMGUI_ENABLED
+	std::array<VkCommandBuffer, 2> submitCommandBuffers =
+	{
+		m_commandBuffers[imageIndex],
+		m_imguiCommandBuffers[imageIndex]
+	};
+#else
+	std::array<VkCommandBuffer, 1> submitCommandBuffers =
+	{
+		m_commandBuffers[imageIndex],
+	};
+#endif
+	
+	// Submit command buffer
+	VkSubmitInfo submitInfo{};
+	{
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+		// Specify which semaphores to wait on before execution and which stage to wait on.
+		// We want to wait until the image is available so when the graphics pipeline writes to the color attachment.
+		// The wait semaphores should correspond to the wait stages array.
+		{
+			submitInfo.waitSemaphoreCount = 1;
+			submitInfo.pWaitSemaphores = waitSemaphores;
+			submitInfo.pWaitDstStageMask = waitStages;
+		}
+
+		// Specify which command buffers to submit for execution.
+		// We want to submit the buffer that binds the swap chain image we acquired as color attachment.
+		{
+			submitInfo.commandBufferCount = submitCommandBuffers.size();
+			submitInfo.pCommandBuffers = submitCommandBuffers.data();
+		}
+
+		// Specify which semaphores to signal after execution.
+		{
+			submitInfo.signalSemaphoreCount = 1;
+			submitInfo.pSignalSemaphores = signalSemaphores;
+		}
+
+		vkResetFences(m_device, 1, &m_inFlightFences[m_currentFrame]);
+
+		VK_ASSERT(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[m_currentFrame]), "Failed to submit draw command buffer");
+	}
+	
+	// Present
+	// Submit result back to swap chain to show on screen.
+
+	VkSwapchainKHR swapChains[] = { m_swapChain };
+	VkPresentInfoKHR presentInfo{};
+	{
+		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
+		// Specify which semaphores to wait on before presenting.
+		{
+			presentInfo.waitSemaphoreCount = 1;
+			presentInfo.pWaitSemaphores = signalSemaphores;
+		}
+
+		// Specify swap chains to present images to and which image to present.
+		{
+			presentInfo.swapchainCount = 1;
+			presentInfo.pSwapchains = swapChains;
+			presentInfo.pImageIndices = &imageIndex;
+		}
+
+		// Specify array of results to check if the result was successful.
+		presentInfo.pResults = nullptr;
+	}
+
+	vkQueuePresentKHR(m_presentQueue, &presentInfo);
+
+	// Wait for work to finish after submission.
+	vkQueueWaitIdle(m_presentQueue);
+
+	m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
 void HelloTriangle::FrameBufferResizeCallback(GLFWwindow* window, int width, int height)
@@ -50,6 +244,70 @@ void HelloTriangle::InitWindow()
 	glfwSetFramebufferSizeCallback(m_window, FrameBufferResizeCallback);
 }
 
+void HelloTriangle::InitImGui()
+{
+	// Setup Dear ImGui context
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+
+	// Setup Dear ImGui style
+	ImGui::StyleColorsDark();
+	//ImGui::StyleColorsClassic();
+
+	// Setup Platform/Renderer bindings
+	ImGui_ImplGlfw_InitForVulkan(m_window, true);
+
+	auto queueFamily = FindQueueFamilies(m_physicalDevice);
+	auto swapChainSupport = QuerySwapChainSupport(m_physicalDevice);
+	
+	ImGui_ImplVulkan_InitInfo init_info = {};
+	{
+		init_info.Instance = m_instance;
+		init_info.PhysicalDevice = m_physicalDevice;
+		init_info.Device = m_device;
+		init_info.QueueFamily = queueFamily.graphicsFamily.value();
+		init_info.Queue = m_graphicsQueue;
+		init_info.PipelineCache = nullptr;
+		init_info.DescriptorPool = m_imguiDescriptorPool;
+		init_info.Allocator = nullptr;
+		init_info.MinImageCount = swapChainSupport.capabilities.minImageCount + 1;
+		init_info.ImageCount = NumSwapChainImages();
+		init_info.CheckVkResultFn = nullptr;
+	}
+	ImGui_ImplVulkan_Init(&init_info, m_imguiRenderPass);
+
+	// Upload Fonts
+	{
+		// Use any command queue
+		VkCommandPool command_pool = m_imguiCommandPool;
+		VK_ASSERT(vkResetCommandPool(m_device, command_pool, 0), "");
+		
+		VkCommandBuffer command_buffer = m_imguiCommandBuffers[m_currentFrame];
+		
+		VkCommandBufferBeginInfo begin_info = {};
+		begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+		vkBeginCommandBuffer(command_buffer, &begin_info);
+
+		ImGui_ImplVulkan_CreateFontsTexture(command_buffer);
+
+		VkSubmitInfo end_info = {};
+		end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		end_info.commandBufferCount = 1;
+		end_info.pCommandBuffers = &command_buffer;
+		vkEndCommandBuffer(command_buffer);
+		vkQueueSubmit(m_graphicsQueue, 1, &end_info, VK_NULL_HANDLE);
+
+		vkDeviceWaitIdle(m_device);
+		ImGui_ImplVulkan_DestroyFontUploadObjects();
+	}
+
+	ImGui_ImplVulkan_DestroyFontUploadObjects();
+}
+
 void HelloTriangle::InitVulkan()
 {
 	CreateInstance();
@@ -59,7 +317,7 @@ void HelloTriangle::InitVulkan()
 	CreateLogicalDevice();
 	CreateSwapChain();
 	CreateImageViews();
-	CreateRenderPass();
+	CreateRenderPasses();
 	CreateDescriptorSetLayout();
 	CreateGraphicsPipeline();
 	CreateCommandPool();
@@ -73,7 +331,7 @@ void HelloTriangle::InitVulkan()
 	CreateVertexBuffer();
 	CreateIndexBuffer();
 	CreateUniformBuffers();
-	CreateDescriptorPool();
+	CreateDescriptorPools();
 	CreateDescriptorSets();
 	CreateCommandBuffers();
 	CreateSyncObjects();
@@ -649,13 +907,13 @@ void HelloTriangle::RecreateSwapChain()
 	
 	CreateSwapChain();
 	CreateImageViews();
-	CreateRenderPass();
+	CreateRenderPasses();
 	CreateGraphicsPipeline();
 	CreateColorResources();
 	CreateDepthResources();
 	CreateFrameBuffers();
 	CreateUniformBuffers();
-	CreateDescriptorPool();
+	CreateDescriptorPools();
 	CreateDescriptorSets();
 	CreateCommandBuffers();
 }
@@ -967,6 +1225,15 @@ VkShaderModule HelloTriangle::CreateShaderModule(const std::vector<char>& code)
 	return shaderModule;
 }
 
+void HelloTriangle::CreateRenderPasses()
+{
+	CreateRenderPass();
+	
+#if IMGUI_ENABLED
+	CreateImGuiRenderPass();
+#endif
+}
+
 void HelloTriangle::CreateRenderPass()
 {
 	// Tell Vulkan about the frame buffer attachments used for rendering.
@@ -974,81 +1241,68 @@ void HelloTriangle::CreateRenderPass()
 	// We encapsulate that in a render pass object.
 
 	VkAttachmentDescription colorAttachment{};
-	{
-		colorAttachment.format = m_swapChainImageFormat;
-		colorAttachment.samples = m_msaaSamples;
+	CreateAttachmentDescription(
+		colorAttachment,
+		m_swapChainImageFormat,
+		0,
+		m_msaaSamples, 
+		VK_ATTACHMENT_LOAD_OP_CLEAR,				// Clear buffer for next frame.
+		VK_ATTACHMENT_STORE_OP_STORE,				// Save for later since we want to see the triangle.
+		VK_ATTACHMENT_LOAD_OP_DONT_CARE,			// Clear buffer for next frame.
+		VK_ATTACHMENT_STORE_OP_DONT_CARE,			// Save for later since we want to see the triangle.
+		VK_IMAGE_LAYOUT_UNDEFINED,					// We don't care about the previous image since we clear it anyway.
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL	// The image should be ready to present in the swap chain.
+	);
 
-		// What to do with the attachment data before/after rendering.
-		// Color and depth
-		{
-			colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;	// Clear buffer for next frame.
-			colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;	// Save for later since we want to see the triangle.
-		}
-
-		// Same as above except for the stencil data.
-		{
-			colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-			colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		}
-
-		// Initial - Which layout the image will have before the pass begins.
-		// Final - Specifies layout to automatically transition to when the render pass finishes.
-		{
-			colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;		// We don't care about the previous image since we clear it anyway.
-			colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;	// The image should be ready to present in the swap chain.
-		}
-	}
-
-	// Subpasses - passes that rely on the previous pass.
-	VkAttachmentReference colorAttachmentRef{};
-	{
-		colorAttachmentRef.attachment = 0;	// Which attachment to reference by index.
-		colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;	// Which layout we want the attachment to have.
-	}
+	VkAttachmentDescription depthAttachment{};
+	CreateAttachmentDescription(
+		depthAttachment,
+		FindDepthFormat(),
+		0,
+		m_msaaSamples,
+		VK_ATTACHMENT_LOAD_OP_CLEAR,
+		VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		VK_IMAGE_LAYOUT_UNDEFINED,
+		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+	);
 
 	// Multisampled images cannot be presented directly, needs to be resolved to a regular image.
 	// In order to present it we need to add a new attachment.
 	VkAttachmentDescription colorAttachmentResolve{};
-	{
-		colorAttachmentResolve.format = m_swapChainImageFormat;
-		colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
-		colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		colorAttachmentResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-	}
+	CreateAttachmentDescription(
+		colorAttachmentResolve,
+		m_swapChainImageFormat,
+		0,
+		VK_SAMPLE_COUNT_1_BIT,
+		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		VK_ATTACHMENT_STORE_OP_STORE,
+		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		VK_IMAGE_LAYOUT_UNDEFINED,
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+	);
 
-	VkAttachmentReference colorAttachmentResolveRef{};
-	{
-		colorAttachmentResolveRef.attachment = 2;
-		colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	}
-
-	VkAttachmentDescription depthAttachment{};
-	{
-		depthAttachment.format = FindDepthFormat();
-		depthAttachment.samples = m_msaaSamples;
-		depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	}
+	// Subpasses - passes that rely on the previous pass.
+	VkAttachmentReference colorAttachmentRef{};
+	CreateAttachmentReference(colorAttachmentRef, 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 	VkAttachmentReference depthAttachmentRef{};
-	{
-		depthAttachmentRef.attachment = 1;
-		depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	}
+	CreateAttachmentReference(depthAttachmentRef, 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+
+	VkAttachmentReference colorAttachmentResolveRef{};
+	CreateAttachmentReference(colorAttachmentResolveRef, 2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+	std::array<VkAttachmentReference, 1> colorAttachments = {
+		colorAttachmentRef,
+	};
 
 	VkSubpassDescription subpass{};
 	{
 		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-		subpass.colorAttachmentCount = 1;
-		subpass.pColorAttachments = &colorAttachmentRef;
+		subpass.colorAttachmentCount = static_cast<uint32_t>(colorAttachments.size());
+		subpass.pColorAttachments = colorAttachments.data();
 		subpass.pDepthStencilAttachment = &depthAttachmentRef;
 		subpass.pResolveAttachments = &colorAttachmentResolveRef;
 
@@ -1058,31 +1312,22 @@ void HelloTriangle::CreateRenderPass()
 	}
 
 	VkSubpassDependency dependency{};
-	{
-		// Use a dependency to make sure the render pass waits until the pipeline writes to the buffer.
-		// Prevent the transition from happening until it's ready.
+	CreateSubpassDependency(
+		dependency, 
+		0, 
+		VK_SUBPASS_EXTERNAL, 
+		0, 
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT, 
+		0, 
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+	);
 
-		// Dependency indices and subpass
-		{
-			dependency.srcSubpass = VK_SUBPASS_EXTERNAL;	// Implicit subpass before/after render pass.
-			dependency.dstSubpass = 0;	// Our subpass
-		}
-
-		// Specify which operations to wait on and which stages they should occur
-		// Wait for swap chain to finish reading from image before we can access it.
-		// Make sure we specify the stages to prevent conflicts between transitions (depth vs color)
-		{
-			dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-			dependency.srcAccessMask = 0;
-		}
-
-		{
-			dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-			dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-		}
-	}
-
-	std::array<VkAttachmentDescription, 3> attachments = { colorAttachment, depthAttachment, colorAttachmentResolve };
+	std::array<VkAttachmentDescription, 3> attachments = {
+		colorAttachment,
+		depthAttachment,
+		colorAttachmentResolve,
+	};
 
 	// Create the render pass
 	VkRenderPassCreateInfo renderPassInfo{};
@@ -1099,11 +1344,71 @@ void HelloTriangle::CreateRenderPass()
 	VK_ASSERT(vkCreateRenderPass(m_device, &renderPassInfo, nullptr, &m_renderPass), "Failed to create render pass");
 }
 
+void HelloTriangle::CreateImGuiRenderPass()
+{
+	VkAttachmentDescription imguiAttachment{};
+	CreateAttachmentDescription(
+		imguiAttachment,
+		m_swapChainImageFormat,
+		0,
+		VK_SAMPLE_COUNT_1_BIT,
+		VK_ATTACHMENT_LOAD_OP_LOAD,
+		VK_ATTACHMENT_STORE_OP_STORE,
+		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+	);
+
+	VkAttachmentReference imguiAttachmentRef{};
+	CreateAttachmentReference(imguiAttachmentRef, 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+	VkSubpassDescription subpass{};
+	{
+		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+		subpass.colorAttachmentCount = 1;
+		subpass.pColorAttachments = &imguiAttachmentRef;
+		subpass.pDepthStencilAttachment = nullptr;
+		subpass.pResolveAttachments = nullptr;
+	}
+
+	VkSubpassDependency dependency{};
+	CreateSubpassDependency(
+		dependency,
+		0,
+		VK_SUBPASS_EXTERNAL,
+		0,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		0,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+	);
+
+	std::array<VkAttachmentDescription, 1> attachments = {
+		imguiAttachment
+	};
+
+	// Create the render pass
+	VkRenderPassCreateInfo renderPassInfo{};
+	{
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+		renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+		renderPassInfo.pAttachments = attachments.data();
+		renderPassInfo.subpassCount = 1;
+		renderPassInfo.pSubpasses = &subpass;
+		renderPassInfo.dependencyCount = 1;
+		renderPassInfo.pDependencies = &dependency;
+	}
+
+	VK_ASSERT(vkCreateRenderPass(m_device, &renderPassInfo, nullptr, &m_imguiRenderPass), "Failed to create render pass");
+}
+
 void HelloTriangle::CreateFrameBuffers()
 {
 	// Each FBO will need to reference each of the image view objects.
 
 	m_swapChainFrameBuffers.resize(m_swapChainImageViews.size());
+	m_imguiFrameBuffers.resize(m_swapChainImageViews.size());
 
 	// Iterate over all of the views to create a frame buffer for them.
 	for (auto i = 0; i < m_swapChainImageViews.size(); ++i)
@@ -1130,6 +1435,25 @@ void HelloTriangle::CreateFrameBuffers()
 
 		VK_ASSERT(vkCreateFramebuffer(m_device, &frameBufferInfo, nullptr, &m_swapChainFrameBuffers[i]), "Failed to create frame buffer");
 	}
+
+#if IMGUI_ENABLED
+	{
+		VkImageView attachment[1];
+		VkFramebufferCreateInfo info = {};
+		info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		info.renderPass = m_imguiRenderPass;
+		info.attachmentCount = 1;
+		info.pAttachments = attachment;
+		info.width = m_swapChainExtent.width;
+		info.height = m_swapChainExtent.height;
+		info.layers = 1;
+		for (uint32_t i = 0; i < m_imguiFrameBuffers.size(); ++i)
+		{
+			attachment[0] = m_swapChainImageViews[i];
+			vkCreateFramebuffer(m_device, &info, nullptr, &m_imguiFrameBuffers[i]);
+		}
+	}
+#endif
 }
 
 void HelloTriangle::CreateCommandPool()
@@ -1363,7 +1687,16 @@ void HelloTriangle::CreateUniformBuffers()
 	}
 }
 
-void HelloTriangle::CreateDescriptorPool()
+void HelloTriangle::CreateDescriptorPools()
+{
+	CreateMainDescriptorPool();
+
+#if IMGUI_ENABLED
+	CreateImGuiDescriptorPool();
+#endif
+}
+
+void HelloTriangle::CreateMainDescriptorPool()
 {
 	// Descriptor sets must be allocated from a command pool.
 	
@@ -1376,16 +1709,27 @@ void HelloTriangle::CreateDescriptorPool()
 	}
 
 	// Allocate one descriptor every frame.
-	VkDescriptorPoolCreateInfo poolInfo{};
-	{
-		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-		poolInfo.pPoolSizes = poolSizes.data();
-		poolInfo.maxSets = static_cast<uint32_t>(m_swapChainImages.size());	// Max number of sets to be allocated
-	}
+	CreateDescriptorPool(m_device, &m_descriptorPool, poolSizes.data(), static_cast<uint32_t>(poolSizes.size()), static_cast<uint32_t>(NumSwapChainImages()));
+}
 
-	// Create descriptor pool
-	VK_ASSERT(vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool), "Failed to create descriptor pool");
+void HelloTriangle::CreateImGuiDescriptorPool()
+{
+	VkDescriptorPoolSize poolSizes[] =
+	{
+		{ VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+	};
+
+	CreateDescriptorPool(m_device, &m_imguiDescriptorPool, poolSizes, 11, static_cast<uint32_t>(NumSwapChainImages()));
 }
 
 void HelloTriangle::CreateDescriptorSets()
@@ -1554,6 +1898,38 @@ void HelloTriangle::CreateCommandBuffers()
 
 		VK_ASSERT(vkEndCommandBuffer(m_commandBuffers[i]), "Failed to record command buffer");
 	}
+
+#if IMGUI_ENABLED
+	CreateImGuiCommandBuffers();
+#endif
+}
+
+//https://frguthmann.github.io/posts/vulkan_imgui/
+void HelloTriangle::CreateCommandBuffers(VkCommandBuffer* commandBuffer, uint32_t commandBufferCount, VkCommandPool &commandPool) {
+	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
+	commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	commandBufferAllocateInfo.commandPool = commandPool;
+	commandBufferAllocateInfo.commandBufferCount = commandBufferCount;
+	vkAllocateCommandBuffers(m_device, &commandBufferAllocateInfo, commandBuffer);
+}
+
+void HelloTriangle::CreateImGuiCommandBuffers()
+{
+	auto index = FindQueueFamilies(m_physicalDevice);
+	
+	// todo: move to new function
+	VkCommandPoolCreateInfo commandPoolCreateInfo = {};
+	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	commandPoolCreateInfo.queueFamilyIndex = index.graphicsFamily.value();
+	commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+	if (vkCreateCommandPool(m_device, &commandPoolCreateInfo, nullptr, &m_imguiCommandPool) != VK_SUCCESS) {
+		throw std::runtime_error("Could not create graphics command pool");
+	}
+	
+	m_imguiCommandBuffers.resize(m_swapChainFrameBuffers.size());
+	CreateCommandBuffers(m_imguiCommandBuffers.data(), static_cast<uint32_t>(m_imguiCommandBuffers.size()), m_imguiCommandPool);
 }
 
 VkCommandBuffer HelloTriangle::BeginSingleTimeCommands()
@@ -2140,126 +2516,6 @@ void HelloTriangle::CreateColorResources()
 	m_colorImageView = CreateImageView(m_colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 }
 
-void HelloTriangle::MainLoop()
-{
-	while (!glfwWindowShouldClose(m_window))
-	{
-		glfwPollEvents();
-		DrawFrame();
-	}
-
-	vkDeviceWaitIdle(m_device);
-}
-
-void HelloTriangle::DrawFrame()
-{
-	// -Get image from swap chain
-	// -Execute command buffer with the image as an attachment in the frame buffer
-	// -Return the image to the swap chain to present
-
-	// These events are asynchronous, we need to sync them up.
-	// Semaphores vs fences:
-	// -Fences used for syncing rendering
-	// -Semaphores used for syncing operations across command queues
-
-	vkWaitForFences(m_device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
-	
-	uint32_t imageIndex;	// Store index of the image from the swap chain.
-	auto acquireResult = vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX, m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
-
-	// If swap chain is out of date or suboptimal, recreate it.
-	if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR || acquireResult == VK_SUBOPTIMAL_KHR)
-	{
-		frameBufferResized = false;
-		RecreateSwapChain();
-		return;
-	}
-	else if (acquireResult != VK_SUCCESS)
-	{
-		ASSERT(false, "Failed to acquire swap chain image");
-	}
-	
-	// Check if previous frame is using this image (waiting on a fence)
-	if (m_imagesInFlight[imageIndex] != VK_NULL_HANDLE)
-	{
-		vkWaitForFences(m_device, 1, &m_imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
-	}
-
-	// Mark image as being used
-	m_imagesInFlight[imageIndex] = m_inFlightFences[m_currentFrame];
-	
-	VkSemaphore waitSemaphores[] = { m_imageAvailableSemaphores[m_currentFrame] };
-	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-	VkSemaphore signalSemaphores[] = { m_renderFinishedSemaphores[m_currentFrame] };
-
-	// Update uniforms
-	UpdateUniformBuffers(imageIndex);
-	
-	// Submit command buffer
-	VkSubmitInfo submitInfo{};
-	{
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-		// Specify which semaphores to wait on before execution and which stage to wait on.
-		// We want to wait until the image is available so when the graphics pipeline writes to the color attachment.
-		// The wait semaphores should correspond to the wait stages array.
-		{
-			submitInfo.waitSemaphoreCount = 1;
-			submitInfo.pWaitSemaphores = waitSemaphores;
-			submitInfo.pWaitDstStageMask = waitStages;
-		}
-
-		// Specify which command buffers to submit for execution.
-		// We want to submit the buffer that binds the swap chain image we acquired as color attachment.
-		{
-			submitInfo.commandBufferCount = 1;
-			submitInfo.pCommandBuffers = &m_commandBuffers[imageIndex];
-		}
-
-		// Specify which semaphores to signal after execution.
-		{
-			submitInfo.signalSemaphoreCount = 1;
-			submitInfo.pSignalSemaphores = signalSemaphores;
-		}
-
-		vkResetFences(m_device, 1, &m_inFlightFences[m_currentFrame]);
-		
-		VK_ASSERT(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[m_currentFrame]), "Failed to submit draw command buffer");
-	}
-
-	// Present
-	// Submit result back to swap chain to show on screen.
-	
-	VkSwapchainKHR swapChains[] = { m_swapChain };
-	VkPresentInfoKHR presentInfo{};
-	{
-		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-
-		// Specify which semaphores to wait on before presenting.
-		{
-			presentInfo.waitSemaphoreCount = 1;
-			presentInfo.pWaitSemaphores = signalSemaphores;
-		}
-
-		// Specify swap chains to present images to and which image to present.
-		{
-			presentInfo.swapchainCount = 1;
-			presentInfo.pSwapchains = swapChains;
-			presentInfo.pImageIndices = &imageIndex;
-		}
-
-		// Specify array of results to check if the result was successful.
-		presentInfo.pResults = nullptr;
-	}
-	
-	vkQueuePresentKHR(m_presentQueue, &presentInfo);
-
-	// Wait for work to finish after submission.
-	vkQueueWaitIdle(m_presentQueue);
-
-	m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
-}
-
 void HelloTriangle::CleanupSwapChain()
 {
 	vkDestroyImageView(m_device, m_colorImageView, nullptr);
@@ -2275,11 +2531,25 @@ void HelloTriangle::CleanupSwapChain()
 		vkDestroyFramebuffer(m_device, framebuffer, nullptr);
 	}
 
+#if IMGUI_ENABLED
+	for (auto& framebuffer : m_imguiFrameBuffers) {
+		vkDestroyFramebuffer(m_device, framebuffer, nullptr);
+	}
+#endif
+
 	vkFreeCommandBuffers(m_device, m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
 
+#if IMGUI_ENABLED
+	vkFreeCommandBuffers(m_device, m_imguiCommandPool, static_cast<uint32_t>(m_imguiCommandBuffers.size()), m_imguiCommandBuffers.data());
+#endif
+	
 	vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
 	vkDestroyRenderPass(m_device, m_renderPass, nullptr);
+#if IMGUI_ENABLED
+	vkDestroyRenderPass(m_device, m_imguiRenderPass, nullptr);
+	vkDestroyCommandPool(m_device, m_imguiCommandPool, nullptr);
+#endif
 
 	for (auto& imageView : m_swapChainImageViews)
 	{
@@ -2295,6 +2565,14 @@ void HelloTriangle::CleanupSwapChain()
 	}
 
 	vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr);
+
+#if IMGUI_ENABLED
+	// Resources to destroy when the program ends
+	ImGui_ImplVulkan_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
+	vkDestroyDescriptorPool(m_device, m_imguiDescriptorPool, nullptr);
+#endif
 }
 
 void HelloTriangle::Cleanup()
