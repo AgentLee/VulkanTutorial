@@ -1,5 +1,10 @@
 #pragma once
 
+#ifndef GLFW_INCLUDE_VULKAN
+#define GLFW_INCLUDE_VULKAN
+#endif
+#include <GLFW/glfw3.h>
+
 #include <chrono>
 #include <fstream>
 #include <vector>
@@ -69,3 +74,19 @@ static float GetCurrentTime()
 #else
 #   define VK_ASSERT(condition, message) do { } while (false)
 #endif
+
+static std::vector<const char*> GetRequiredExtensions()
+{
+	// Interface with GLFW
+	uint32_t glfwExtensionCount = 0;
+	auto glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+	std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+
+	if (g_enableValidationLayers)
+	{
+		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+	}
+
+	return extensions;
+}

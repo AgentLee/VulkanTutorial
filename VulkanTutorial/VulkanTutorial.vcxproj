@@ -173,6 +173,7 @@
     <ClCompile Include="src\hello_triangle.cpp" />
     <ClCompile Include="src\imgui_manager.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\vulkan_manager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="libs\imgui\imconfig.h" />
@@ -190,6 +191,7 @@
     <ClInclude Include="src\imgui_manager.h" />
     <ClInclude Include="src\vertex.h" />
     <ClInclude Include="src\vulkan_helper.h" />
+    <ClInclude Include="src\vulkan_manager.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="src\shaders\compile.bat" />

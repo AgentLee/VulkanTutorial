@@ -10,6 +10,8 @@
 
 #include <vulkan/vulkan.h>
 
+#include "vulkan_manager.h"
+
 #include <iostream>
 #include <stdexcept>
 #include <cstdlib>
@@ -28,6 +30,8 @@ public:
 
 	// This needs to be static because GLFW doesn't know how to call it from a this pointer.
 	static void FrameBufferResizeCallback(GLFWwindow* window, int width, int height);
+
+	VulkanManager m_vkManager;
 	
 private:
 	void InitWindow();
@@ -40,55 +44,10 @@ private:
 	
 	void InitVulkan();
 	
-	void CreateInstance();
-
-	void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
-	// Need to set up the handle to the debug callback.
-	void SetupDebugMessenger();
-	bool CheckValidationLayerSupport();
-	// Return required list of extensions based on the enabled validation layers.
-	std::vector<const char*> GetRequiredExtensions();
-
-	// Look for graphics card to use.
-	void PickPhysicalDevice();
-
-	// Check device compatibility
-	bool IsDeviceCompatible(VkPhysicalDevice device);
-	bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
-	int RateDeviceCompatibility(VkPhysicalDevice device);
 	VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 	
-	struct QueueFamilyIndices
-	{
-		std::optional<uint32_t> graphicsFamily;
-		std::optional<uint32_t> presentFamily;
-
-		// Ensures the device has the features we need and can present to the surface.
-		bool IsComplete() { return graphicsFamily.has_value() && presentFamily.has_value(); }
-	};
-
-	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
-
-	void CreateLogicalDevice();
-
-	void CreateSurface();
-
-	// The device needs to support these swap chain details.
-	struct SwapChainSupportDetails
-	{
-		VkSurfaceCapabilitiesKHR capabilities;		// min/max number of images in swap chain, swap chain dimensions, transform data
-		std::vector<VkSurfaceFormatKHR> formats;	// pixel format, color space
-		std::vector<VkPresentModeKHR> presentModes;	
-	};
-
-	SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
-	VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
-	VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
-	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
-	void CreateSwapChain();
 	void RecreateSwapChain();
 	void CleanupSwapChain();
-	void CreateImageViews();
 	
 	void CreateDescriptorSetLayout();
 	void CreateGraphicsPipeline();
@@ -127,7 +86,6 @@ private:
 	void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiliing, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 	void CreateTextureImage();
 	void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
-	VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
 	void CreateTextureImageView();
 	void CreateTextureSampler();
 	void GenerateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels);
@@ -136,25 +94,9 @@ private:
 	VkFormat FindDepthFormat();
 	bool HasStencilComponent(VkFormat format);
 
-	VkSampleCountFlagBits GetMaxUsableSampleCount();
 	void CreateColorResources();
 	
-public:
-	size_t NumSwapChainImages() { return m_swapChainImages.size(); }
-
 private:
-	VkInstance m_instance;
-	VkDebugUtilsMessengerEXT m_debugMessenger;
-	VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
-	VkDevice m_device;
-	VkQueue m_graphicsQueue, m_presentQueue;
-	VkSurfaceKHR m_surface;
-
-	VkSwapchainKHR m_swapChain;
-	std::vector<VkImage> m_swapChainImages;
-	VkFormat m_swapChainImageFormat;
-	VkExtent2D m_swapChainExtent;
-	std::vector<VkImageView> m_swapChainImageViews;
 	std::vector<VkFramebuffer> m_swapChainFrameBuffers;
 	
 	VkRenderPass m_renderPass;
@@ -170,12 +112,6 @@ private:
 	VkDescriptorPool m_descriptorPool;
 	std::vector<VkDescriptorSet> m_descriptorSets;
 	
-	// One sem to signal acquisition and another to signal rendering finished for present. 
-	std::vector<VkSemaphore> m_imageAvailableSemaphores, m_renderFinishedSemaphores;
-	// CPU-GPU sync
-	std::vector<VkFence> m_inFlightFences;
-	std::vector<VkFence> m_imagesInFlight;
-
 	// Buffers should be allocated in one go.
 	VkBuffer m_vertexBuffer;
 	VkDeviceMemory m_vertexBufferMemory;
@@ -199,7 +135,7 @@ private:
 	VkDeviceMemory m_depthImageMemory;
 	VkImageView m_depthImageView;
 
-	VkSampleCountFlagBits m_msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+	//VkSampleCountFlagBits m_msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 	VkImage m_colorImage;
 	VkDeviceMemory m_colorImageMemory;
 	VkImageView m_colorImageView;

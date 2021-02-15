@@ -1,3 +1,8 @@
+#pragma once
+
+#include "constants.h"
+#include "helpers.h"
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -95,5 +100,34 @@ public:
 		{
 			func(instance, debugMessenger, pAllocator);
 		}
+	}
+
+	static bool CheckValidationLayerSupport()
+	{
+		uint32_t layerCount;
+		vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+
+		std::vector<VkLayerProperties> availableLayers(layerCount);
+		vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+
+		// Check to make sure the validation layers we want are available.
+		for (auto layerName : g_validationLayers)
+		{
+			bool layerFound = false;
+
+			for (auto& layerProperties : availableLayers)
+			{
+				if (strcmp(layerName, layerProperties.layerName) == 0)
+				{
+					layerFound = true;
+					break;
+				}
+			}
+
+			if (!layerFound)
+				return false;
+		}
+
+		return true;
 	}
 };
