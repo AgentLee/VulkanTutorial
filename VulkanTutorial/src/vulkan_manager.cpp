@@ -16,6 +16,7 @@ void VulkanManager::Initialize()
 	CreateLogicalDevice();
 	CreateSwapChain();
 	CreateImageViews();
+	CreateSyncObjects();
 }
 
 void VulkanManager::CreateInstance()

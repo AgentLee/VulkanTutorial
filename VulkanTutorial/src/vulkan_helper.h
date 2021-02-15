@@ -2,7 +2,7 @@
 
 #include <vulkan/vulkan.h>
 
-void CreateAttachmentDescription(
+static void CreateAttachmentDescription(
 	VkAttachmentDescription& attachment,
 	VkFormat format,
 	VkAttachmentDescriptionFlags flags,
@@ -32,13 +32,13 @@ void CreateAttachmentDescription(
 	attachment.finalLayout = finalLayout;			// The image should be ready to present in the swap chain.
 }
 
-void CreateAttachmentReference(VkAttachmentReference& attachmentReference, uint32_t attachment, VkImageLayout layout)
+static void CreateAttachmentReference(VkAttachmentReference& attachmentReference, uint32_t attachment, VkImageLayout layout)
 {
 	attachmentReference.attachment = attachment;	// Which attachment to reference by index.
 	attachmentReference.layout = layout;			// Which layout we want the attachment to have.
 }
 
-void CreateSubpassDescription(
+static void CreateSubpassDescription(
 	VkSubpassDescription& subpass,
 	VkSubpassDescriptionFlags flags,
 	VkPipelineBindPoint pipelineBindPoint,
@@ -63,7 +63,7 @@ void CreateSubpassDescription(
 	subpass.pPreserveAttachments = preserveAttachments;
 }
 
-void CreateSubpassDependency(VkSubpassDependency& dependency, VkDependencyFlags flags, uint32_t srcSubpass, uint32_t dstSubpass, VkPipelineStageFlags srcStageMask, VkAccessFlags srcAccessMask, VkPipelineStageFlags dstStageMask, VkAccessFlags dstAccessMask)
+static void CreateSubpassDependency(VkSubpassDependency& dependency, VkDependencyFlags flags, uint32_t srcSubpass, uint32_t dstSubpass, VkPipelineStageFlags srcStageMask, VkAccessFlags srcAccessMask, VkPipelineStageFlags dstStageMask, VkAccessFlags dstAccessMask)
 {
 	// Use a dependency to make sure the render pass waits until the pipeline writes to the buffer.
 	// Prevent the transition from happening until it's ready.
@@ -90,7 +90,7 @@ void CreateSubpassDependency(VkSubpassDependency& dependency, VkDependencyFlags 
 	}
 }
 
-void CreateDescriptorPool(VkDevice device, VkDescriptorPool* descriptorPool, VkDescriptorPoolSize* poolSizes, uint32_t poolSizeCount, uint32_t maxSets)
+static void VKCreateDescriptorPool(VkDevice device, VkDescriptorPool* descriptorPool, VkDescriptorPoolSize* poolSizes, uint32_t poolSizeCount, uint32_t maxSets)
 {
 	VkDescriptorPoolCreateInfo poolInfo{};
 	{
@@ -103,4 +103,14 @@ void CreateDescriptorPool(VkDevice device, VkDescriptorPool* descriptorPool, VkD
 	// Create descriptor pool
 	//VK_ASSERT(vkCreateDescriptorPool(device, &poolInfo, nullptr, descriptorPool), "Failed to create descriptor pool");
 	vkCreateDescriptorPool(device, &poolInfo, nullptr, descriptorPool);
+}
+
+//https://frguthmann.github.io/posts/vulkan_imgui/
+static void VKCreateCommandBuffers(VkDevice device, VkCommandBuffer* commandBuffer, uint32_t commandBufferCount, VkCommandPool &commandPool) {
+	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
+	commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	commandBufferAllocateInfo.commandPool = commandPool;
+	commandBufferAllocateInfo.commandBufferCount = commandBufferCount;
+	vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, commandBuffer);
 }

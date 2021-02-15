@@ -34,3 +34,5 @@ static const bool g_enableValidationLayers = true;
 #else
 #define SELECT_BEST_DEVICE
 #endif
+
+static size_t g_currentFrame = 0;

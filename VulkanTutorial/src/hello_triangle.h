@@ -9,8 +9,9 @@
 #include <GLFW/glfw3.h>
 
 #include <vulkan/vulkan.h>
-
 #include "vulkan_manager.h"
+#include "vulkan_base.h"
+#include "imgui_manager.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -31,8 +32,10 @@ public:
 	// This needs to be static because GLFW doesn't know how to call it from a this pointer.
 	static void FrameBufferResizeCallback(GLFWwindow* window, int width, int height);
 
+	// Should be a global?
 	VulkanManager m_vkManager;
-	
+	ImGuiManager m_imguiManager;
+
 private:
 	void InitWindow();
 	void InitImGui();
@@ -55,7 +58,6 @@ private:
 
 	void CreateRenderPasses();
 	void CreateRenderPass();
-	void CreateImGuiRenderPass();
 
 	void CreateFrameBuffers();
 
@@ -70,18 +72,13 @@ private:
 	void CreateUniformBuffers();
 	void CreateDescriptorPools();
 	void CreateMainDescriptorPool();
-	void CreateImGuiDescriptorPool();
 	void CreateDescriptorSets();
 	void UpdateUniformBuffers(uint32_t currentImage);
 	uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
 	void CreateCommandBuffers();
-	void CreateCommandBuffers(VkCommandBuffer* commandBuffer, uint32_t commandBufferCount, VkCommandPool& commandPool);
-	void CreateImGuiCommandBuffers();
 	VkCommandBuffer BeginSingleTimeCommands();
 	void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
-
-	void CreateSyncObjects();
 
 	void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiliing, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 	void CreateTextureImage();
@@ -145,14 +142,6 @@ private:
 	bool frameBufferResized = false;
 	
 	GLFWwindow* m_window;
-
-	// IMGUI
-	VkDescriptorPool m_imguiDescriptorPool;
-	std::vector<VkDescriptorSet> m_imguiDescriptorSets;
-	VkRenderPass m_imguiRenderPass;
-	VkCommandPool m_imguiCommandPool;
-	std::vector<VkCommandBuffer> m_imguiCommandBuffers;
-	std::vector<VkFramebuffer> m_imguiFrameBuffers;
 
 private:
 	std::vector<Vertex> m_vertices;

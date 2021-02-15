@@ -190,6 +190,7 @@
     <ClInclude Include="src\helpers.h" />
     <ClInclude Include="src\imgui_manager.h" />
     <ClInclude Include="src\vertex.h" />
+    <ClInclude Include="src\vulkan_base.h" />
     <ClInclude Include="src\vulkan_helper.h" />
     <ClInclude Include="src\vulkan_manager.h" />
   </ItemGroup>

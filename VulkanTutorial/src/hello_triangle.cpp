@@ -29,7 +29,9 @@ void HelloTriangle::Run()
 
 	m_vkManager = VulkanManager(m_window);
 	m_vkManager.Initialize();
-
+	
+	m_imguiManager.m_vkManager = m_vkManager;
+	
 	InitVulkan();
 	
 #if IMGUI_ENABLED
@@ -53,16 +55,7 @@ void HelloTriangle::MainLoop()
 }
 
 void HelloTriangle::DrawFrame()
-{
-#if IMGUI_ENABLED
-	// Start the Dear ImGui frame
-	ImGui_ImplVulkan_NewFrame();
-	ImGui_ImplGlfw_NewFrame();
-	ImGui::NewFrame();
-	ImGui::ShowDemoWindow();
-	ImGui::Render();
-#endif
-	
+{	
 	// -Get image from swap chain
 	// -Execute command buffer with the image as an attachment in the frame buffer
 	// -Return the image to the swap chain to present
@@ -113,43 +106,14 @@ void HelloTriangle::DrawFrame()
 
 #if IMGUI_ENABLED
 	// Submit ImGui commands
-	{
-		VK_ASSERT(vkResetCommandPool(m_vkManager.GetDevice(), m_imguiCommandPool, 0), "");
-
-		VkCommandBufferBeginInfo info = {};
-		{
-			info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-			info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-		}
-		VK_ASSERT(vkBeginCommandBuffer(m_imguiCommandBuffers[imageIndex], &info), "");
-
-		std::array<VkClearValue, 1> clearValues{};
-		{
-			clearValues[0].color = { 0.45f, 0.55f, 0.60f, 1.00f };
-		}
-
-		VkRenderPassBeginInfo renderpassinfo = {};
-		renderpassinfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderpassinfo.renderPass = m_imguiRenderPass;
-		renderpassinfo.framebuffer = m_imguiFrameBuffers[imageIndex];
-		renderpassinfo.renderArea.extent.width = m_vkManager.GetSwapChainExtent().width;
-		renderpassinfo.renderArea.extent.height = m_vkManager.GetSwapChainExtent().height;
-		renderpassinfo.clearValueCount = 1;
-		renderpassinfo.pClearValues = clearValues.data();
-		vkCmdBeginRenderPass(m_imguiCommandBuffers[imageIndex], &renderpassinfo, VK_SUBPASS_CONTENTS_INLINE);
-
-		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_imguiCommandBuffers[imageIndex]);
-
-		vkCmdEndRenderPass(m_imguiCommandBuffers[imageIndex]);
-		VK_ASSERT(vkEndCommandBuffer(m_imguiCommandBuffers[imageIndex]), "");
-	}
+	m_imguiManager.SubmitDrawCall(imageIndex);
 #endif
 
 #if IMGUI_ENABLED
 	std::array<VkCommandBuffer, 2> submitCommandBuffers =
 	{
 		m_commandBuffers[imageIndex],
-		m_imguiCommandBuffers[imageIndex]
+		m_imguiManager.GetCommandBuffers()[imageIndex]
 	};
 #else
 	std::array<VkCommandBuffer, 1> submitCommandBuffers =
@@ -250,6 +214,8 @@ void HelloTriangle::InitWindow()
 
 void HelloTriangle::InitImGui()
 {
+	// GLFW has to be initialized in main program?
+	
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -275,21 +241,21 @@ void HelloTriangle::InitImGui()
 		init_info.QueueFamily = queueFamily.graphicsFamily.value();
 		init_info.Queue = m_vkManager.GetGraphicsQueue();
 		init_info.PipelineCache = nullptr;
-		init_info.DescriptorPool = m_imguiDescriptorPool;
+		init_info.DescriptorPool = m_imguiManager.GetDescriptorPool();
 		init_info.Allocator = nullptr;
 		init_info.MinImageCount = swapChainSupport.capabilities.minImageCount + 1;
 		init_info.ImageCount = m_vkManager.NumSwapChainImages();
 		init_info.CheckVkResultFn = nullptr;
 	}
-	ImGui_ImplVulkan_Init(&init_info, m_imguiRenderPass);
+	ImGui_ImplVulkan_Init(&init_info, m_imguiManager.GetRenderPass());
 
 	// Upload Fonts
 	{
 		// Use any command queue
-		VkCommandPool command_pool = m_imguiCommandPool;
+		VkCommandPool command_pool = m_imguiManager.GetCommandPool();
 		VK_ASSERT(vkResetCommandPool(m_vkManager.GetDevice(), command_pool, 0), "");
 		
-		VkCommandBuffer command_buffer = m_imguiCommandBuffers[m_currentFrame];
+		VkCommandBuffer command_buffer = m_imguiManager.GetCommandBuffers()[m_currentFrame];
 		
 		VkCommandBufferBeginInfo begin_info = {};
 		begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -315,8 +281,12 @@ void HelloTriangle::InitImGui()
 void HelloTriangle::InitVulkan()
 {
 	CreateRenderPasses();
+
 	CreateDescriptorSetLayout();
+
+	// Move to vulkan manager
 	CreateGraphicsPipeline();
+
 	CreateCommandPool();
 	CreateColorResources();
 	CreateDepthResources();
@@ -331,7 +301,6 @@ void HelloTriangle::InitVulkan()
 	CreateDescriptorPools();
 	CreateDescriptorSets();
 	CreateCommandBuffers();
-	CreateSyncObjects();
 }
 
 VkFormat HelloTriangle::FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling,
@@ -692,7 +661,7 @@ void HelloTriangle::CreateRenderPasses()
 	CreateRenderPass();
 	
 #if IMGUI_ENABLED
-	CreateImGuiRenderPass();
+	m_imguiManager.CreateRenderPass();
 #endif
 }
 
@@ -806,71 +775,12 @@ void HelloTriangle::CreateRenderPass()
 	VK_ASSERT(vkCreateRenderPass(m_vkManager.GetDevice(), &renderPassInfo, nullptr, &m_renderPass), "Failed to create render pass");
 }
 
-void HelloTriangle::CreateImGuiRenderPass()
-{
-	VkAttachmentDescription imguiAttachment{};
-	CreateAttachmentDescription(
-		imguiAttachment,
-		m_vkManager.GetSwapChainImageFormat(),
-		0,
-		VK_SAMPLE_COUNT_1_BIT,
-		VK_ATTACHMENT_LOAD_OP_LOAD,
-		VK_ATTACHMENT_STORE_OP_STORE,
-		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-		VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-	);
-
-	VkAttachmentReference imguiAttachmentRef{};
-	CreateAttachmentReference(imguiAttachmentRef, 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-	VkSubpassDescription subpass{};
-	{
-		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-		subpass.colorAttachmentCount = 1;
-		subpass.pColorAttachments = &imguiAttachmentRef;
-		subpass.pDepthStencilAttachment = nullptr;
-		subpass.pResolveAttachments = nullptr;
-	}
-
-	VkSubpassDependency dependency{};
-	CreateSubpassDependency(
-		dependency,
-		0,
-		VK_SUBPASS_EXTERNAL,
-		0,
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-		0,
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-	);
-
-	std::array<VkAttachmentDescription, 1> attachments = {
-		imguiAttachment
-	};
-
-	// Create the render pass
-	VkRenderPassCreateInfo renderPassInfo{};
-	{
-		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-		renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-		renderPassInfo.pAttachments = attachments.data();
-		renderPassInfo.subpassCount = 1;
-		renderPassInfo.pSubpasses = &subpass;
-		renderPassInfo.dependencyCount = 1;
-		renderPassInfo.pDependencies = &dependency;
-	}
-
-	VK_ASSERT(vkCreateRenderPass(m_vkManager.GetDevice(), &renderPassInfo, nullptr, &m_imguiRenderPass), "Failed to create render pass");
-}
-
 void HelloTriangle::CreateFrameBuffers()
 {
 	// Each FBO will need to reference each of the image view objects.
 
 	m_swapChainFrameBuffers.resize(m_vkManager.GetSwapChainImageViews().size());
-	m_imguiFrameBuffers.resize(m_vkManager.GetSwapChainImageViews().size());
+	m_imguiManager.GetFrameBuffers().resize(m_vkManager.GetSwapChainImageViews().size());
 
 	// Iterate over all of the views to Get a frame buffer for them.
 	for (auto i = 0; i < m_vkManager.GetSwapChainImageViews().size(); ++i)
@@ -903,16 +813,16 @@ void HelloTriangle::CreateFrameBuffers()
 		VkImageView attachment[1];
 		VkFramebufferCreateInfo info = {};
 		info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		info.renderPass = m_imguiRenderPass;
+		info.renderPass = m_imguiManager.GetRenderPass();
 		info.attachmentCount = 1;
 		info.pAttachments = attachment;
 		info.width = m_vkManager.GetSwapChainExtent().width;
 		info.height = m_vkManager.GetSwapChainExtent().height;
 		info.layers = 1;
-		for (uint32_t i = 0; i < m_imguiFrameBuffers.size(); ++i)
+		for (uint32_t i = 0; i < m_imguiManager.GetFrameBuffers().size(); ++i)
 		{
 			attachment[0] = m_vkManager.GetSwapChainImageViews()[i];
-			vkCreateFramebuffer(m_vkManager.GetDevice(), &info, nullptr, &m_imguiFrameBuffers[i]);
+			vkCreateFramebuffer(m_vkManager.GetDevice(), &info, nullptr, &m_imguiManager.GetFrameBuffers()[i]);
 		}
 	}
 #endif
@@ -1154,7 +1064,7 @@ void HelloTriangle::CreateDescriptorPools()
 	CreateMainDescriptorPool();
 
 #if IMGUI_ENABLED
-	CreateImGuiDescriptorPool();
+	m_imguiManager.CreateDescriptorPool();
 #endif
 }
 
@@ -1171,27 +1081,7 @@ void HelloTriangle::CreateMainDescriptorPool()
 	}
 
 	// Allocate one descriptor every frame.
-	CreateDescriptorPool(m_vkManager.GetDevice(), &m_descriptorPool, poolSizes.data(), static_cast<uint32_t>(poolSizes.size()), static_cast<uint32_t>(m_vkManager.NumSwapChainImages()));
-}
-
-void HelloTriangle::CreateImGuiDescriptorPool()
-{
-	VkDescriptorPoolSize poolSizes[] =
-	{
-		{ VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
-	};
-
-	CreateDescriptorPool(m_vkManager.GetDevice(), &m_imguiDescriptorPool, poolSizes, 11, static_cast<uint32_t>(m_vkManager.NumSwapChainImages()));
+	VKCreateDescriptorPool(m_vkManager.GetDevice(), &m_descriptorPool, poolSizes.data(), static_cast<uint32_t>(poolSizes.size()), static_cast<uint32_t>(m_vkManager.NumSwapChainImages()));
 }
 
 void HelloTriangle::CreateDescriptorSets()
@@ -1362,36 +1252,8 @@ void HelloTriangle::CreateCommandBuffers()
 	}
 
 #if IMGUI_ENABLED
-	CreateImGuiCommandBuffers();
+	m_imguiManager.CreateCommandPool();
 #endif
-}
-
-//https://frguthmann.github.io/posts/vulkan_imgui/
-void HelloTriangle::CreateCommandBuffers(VkCommandBuffer* commandBuffer, uint32_t commandBufferCount, VkCommandPool &commandPool) {
-	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
-	commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	commandBufferAllocateInfo.commandPool = commandPool;
-	commandBufferAllocateInfo.commandBufferCount = commandBufferCount;
-	vkAllocateCommandBuffers(m_vkManager.GetDevice(), &commandBufferAllocateInfo, commandBuffer);
-}
-
-void HelloTriangle::CreateImGuiCommandBuffers()
-{
-	auto index = m_vkManager.FindQueueFamilies(m_vkManager.GetPhysicalDevice());
-	
-	// todo: move to new function
-	VkCommandPoolCreateInfo commandPoolCreateInfo = {};
-	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	commandPoolCreateInfo.queueFamilyIndex = index.graphicsFamily.value();
-	commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-
-	if (vkCreateCommandPool(m_vkManager.GetDevice(), &commandPoolCreateInfo, nullptr, &m_imguiCommandPool) != VK_SUCCESS) {
-		throw std::runtime_error("Could not create graphics command pool");
-	}
-	
-	m_imguiCommandBuffers.resize(m_swapChainFrameBuffers.size());
-	CreateCommandBuffers(m_imguiCommandBuffers.data(), static_cast<uint32_t>(m_imguiCommandBuffers.size()), m_imguiCommandPool);
 }
 
 VkCommandBuffer HelloTriangle::BeginSingleTimeCommands()
@@ -1436,11 +1298,6 @@ void HelloTriangle::EndSingleTimeCommands(VkCommandBuffer commandBuffer)
 	VK_ASSERT(vkQueueWaitIdle(m_vkManager.GetGraphicsQueue()), "Failed to wait");
 
 	vkFreeCommandBuffers(m_vkManager.GetDevice(), m_commandPool, 1, &commandBuffer);
-}
-
-void HelloTriangle::CreateSyncObjects()
-{
-	m_vkManager.CreateSyncObjects();
 }
 
 void HelloTriangle::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples,
@@ -1896,6 +1753,8 @@ void HelloTriangle::CreateColorResources()
 
 void HelloTriangle::CleanupSwapChain()
 {
+	m_imguiManager.Cleanup();
+	
 	vkDestroyImageView(m_vkManager.GetDevice(), m_colorImageView, nullptr);
 	vkDestroyImage(m_vkManager.GetDevice(), m_colorImage, nullptr);
 	vkFreeMemory(m_vkManager.GetDevice(), m_colorImageMemory, nullptr);
@@ -1909,25 +1768,11 @@ void HelloTriangle::CleanupSwapChain()
 		vkDestroyFramebuffer(m_vkManager.GetDevice(), framebuffer, nullptr);
 	}
 
-#if IMGUI_ENABLED
-	for (auto& framebuffer : m_imguiFrameBuffers) {
-		vkDestroyFramebuffer(m_vkManager.GetDevice(), framebuffer, nullptr);
-	}
-#endif
-
 	vkFreeCommandBuffers(m_vkManager.GetDevice(), m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
 
-#if IMGUI_ENABLED
-	vkFreeCommandBuffers(m_vkManager.GetDevice(), m_imguiCommandPool, static_cast<uint32_t>(m_imguiCommandBuffers.size()), m_imguiCommandBuffers.data());
-#endif
-	
 	vkDestroyPipeline(m_vkManager.GetDevice(), m_graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(m_vkManager.GetDevice(), m_pipelineLayout, nullptr);
 	vkDestroyRenderPass(m_vkManager.GetDevice(), m_renderPass, nullptr);
-#if IMGUI_ENABLED
-	vkDestroyRenderPass(m_vkManager.GetDevice(), m_imguiRenderPass, nullptr);
-	vkDestroyCommandPool(m_vkManager.GetDevice(), m_imguiCommandPool, nullptr);
-#endif
 
 	for (auto& imageView : m_vkManager.GetSwapChainImageViews())
 	{
@@ -1943,14 +1788,6 @@ void HelloTriangle::CleanupSwapChain()
 	}
 
 	vkDestroyDescriptorPool(m_vkManager.GetDevice(), m_descriptorPool, nullptr);
-
-#if IMGUI_ENABLED
-	// Resources to destroy when the program ends
-	ImGui_ImplVulkan_Shutdown();
-	ImGui_ImplGlfw_Shutdown();
-	ImGui::DestroyContext();
-	vkDestroyDescriptorPool(m_vkManager.GetDevice(), m_imguiDescriptorPool, nullptr);
-#endif
 }
 
 void HelloTriangle::Cleanup()

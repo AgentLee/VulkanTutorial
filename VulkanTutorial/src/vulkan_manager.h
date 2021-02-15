@@ -79,7 +79,8 @@ public:
 	std::vector<VkFence>& GetImagesInFlight() { return m_imagesInFlight; }
 
 	VkDebugUtilsMessengerEXT& GetDebugMessenger() { return m_debugMessenger; }
-	
+
+	GLFWwindow* GetWindow() { return m_window; };
 private:
 	// Vulkan
 	VkInstance m_instance;
