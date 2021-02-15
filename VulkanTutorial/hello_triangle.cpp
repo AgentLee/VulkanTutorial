@@ -78,6 +78,12 @@ void HelloTriangle::DrawFrame()
 	{
 		frameBufferResized = false;
 		RecreateSwapChain();
+
+#if IMGUI_ENABLED
+		// Should be more elegant than this
+		InitImGui();
+#endif
+		
 		return;
 	}
 	else if (acquireResult != VK_SUCCESS)
@@ -115,7 +121,7 @@ void HelloTriangle::DrawFrame()
 
 		std::array<VkClearValue, 1> clearValues{};
 		{
-			clearValues[0].color = { 1, 0, 0, 1 };
+			clearValues[0].color = { 0.45f, 0.55f, 0.60f, 1.00f };
 		}
 
 		VkRenderPassBeginInfo renderpassinfo = {};
@@ -256,7 +262,7 @@ void HelloTriangle::InitImGui()
 
 	auto queueFamily = FindQueueFamilies(m_physicalDevice);
 	auto swapChainSupport = QuerySwapChainSupport(m_physicalDevice);
-
+	
 	ImGui_ImplVulkan_InitInfo init_info = {};
 	{
 		init_info.Instance = m_instance;
@@ -2525,12 +2531,25 @@ void HelloTriangle::CleanupSwapChain()
 		vkDestroyFramebuffer(m_device, framebuffer, nullptr);
 	}
 
+#if IMGUI_ENABLED
+	for (auto& framebuffer : m_imguiFrameBuffers) {
+		vkDestroyFramebuffer(m_device, framebuffer, nullptr);
+	}
+#endif
+
 	vkFreeCommandBuffers(m_device, m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
 
+#if IMGUI_ENABLED
+	vkFreeCommandBuffers(m_device, m_imguiCommandPool, static_cast<uint32_t>(m_imguiCommandBuffers.size()), m_imguiCommandBuffers.data());
+#endif
+	
 	vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
 	vkDestroyRenderPass(m_device, m_renderPass, nullptr);
+#if IMGUI_ENABLED
 	vkDestroyRenderPass(m_device, m_imguiRenderPass, nullptr);
+	vkDestroyCommandPool(m_device, m_imguiCommandPool, nullptr);
+#endif
 
 	for (auto& imageView : m_swapChainImageViews)
 	{
@@ -2548,6 +2567,10 @@ void HelloTriangle::CleanupSwapChain()
 	vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr);
 
 #if IMGUI_ENABLED
+	// Resources to destroy when the program ends
+	ImGui_ImplVulkan_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
 	vkDestroyDescriptorPool(m_device, m_imguiDescriptorPool, nullptr);
 #endif
 }
