@@ -18,8 +18,8 @@
 #include <algorithm>
 #include <unordered_map>
 
-#include "libs/imgui/imgui_impl_glfw.h"
-#include "libs/imgui/imgui_impl_vulkan.h"
+#include "../libs/imgui/imgui_impl_glfw.h"
+#include "../libs/imgui/imgui_impl_vulkan.h"
 
 #define IMGUI_ENABLED true
 
@@ -970,8 +970,8 @@ void HelloTriangle::CreateDescriptorSetLayout()
 void HelloTriangle::CreateGraphicsPipeline()
 {
 	// Load shader code
-	auto vsCode = ReadFile("shaders/vert.spv");
-	auto fsCode = ReadFile("shaders/frag.spv");
+	auto vsCode = ReadFile("src/shaders/vert.spv");
+	auto fsCode = ReadFile("src/shaders/frag.spv");
 
 	// Create modules
 	auto vsModule = CreateShaderModule(vsCode);

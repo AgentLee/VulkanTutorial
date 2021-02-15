@@ -101,5 +101,6 @@ void CreateDescriptorPool(VkDevice device, VkDescriptorPool* descriptorPool, VkD
 	}
 
 	// Create descriptor pool
-	VK_ASSERT(vkCreateDescriptorPool(device, &poolInfo, nullptr, descriptorPool), "Failed to create descriptor pool");
+	//VK_ASSERT(vkCreateDescriptorPool(device, &poolInfo, nullptr, descriptorPool), "Failed to create descriptor pool");
+	vkCreateDescriptorPool(device, &poolInfo, nullptr, descriptorPool);
 }

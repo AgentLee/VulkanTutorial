@@ -24,12 +24,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="hello_triangle.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="libs\imgui\imgui.cpp">
       <Filter>Libraries\ImGui</Filter>
     </ClCompile>
@@ -51,23 +45,17 @@
     <ClCompile Include="libs\imgui\imgui_impl_vulkan.cpp">
       <Filter>Libraries\ImGui</Filter>
     </ClCompile>
+    <ClCompile Include="src\hello_triangle.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\imgui_manager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="hello_triangle.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="constants.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="debug_layer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="helpers.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="vertex.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="libs\imgui\imconfig.h">
       <Filter>Libraries\ImGui</Filter>
     </ClInclude>
@@ -92,18 +80,36 @@
     <ClInclude Include="libs\imgui\imgui_impl_vulkan.h">
       <Filter>Libraries\ImGui</Filter>
     </ClInclude>
-    <ClInclude Include="vulkan_helper.h">
+    <ClInclude Include="src\constants.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\debug_layer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\hello_triangle.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\helpers.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\imgui_manager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\vertex.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\vulkan_helper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Shaders\fs.frag">
+    <None Include="src\shaders\compile.bat">
       <Filter>Source Files\Shaders</Filter>
     </None>
-    <None Include="Shaders\vs.vert">
+    <None Include="src\shaders\fs.frag">
       <Filter>Source Files\Shaders</Filter>
     </None>
-    <None Include="Shaders\compile.bat">
+    <None Include="src\shaders\vs.vert">
       <Filter>Source Files\Shaders</Filter>
     </None>
   </ItemGroup>

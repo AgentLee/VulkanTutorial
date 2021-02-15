@@ -1,8 +1,8 @@
 #pragma once
 
-#include "libs/imgui/imgui.h"
-#include "libs/imgui/imgui_impl_glfw.h"
-#include "libs/imgui/imgui_impl_vulkan.h"
+#include "../libs/imgui/imgui.h"
+#include "../libs/imgui/imgui_impl_glfw.h"
+#include "../libs/imgui/imgui_impl_vulkan.h"
 
 #define GLFW_INCLUDE_NONE
 #define GLFW_INCLUDE_VULKAN

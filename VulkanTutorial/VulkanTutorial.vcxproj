@@ -163,7 +163,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="hello_triangle.cpp" />
     <ClCompile Include="libs\imgui\imgui.cpp" />
     <ClCompile Include="libs\imgui\imgui_demo.cpp" />
     <ClCompile Include="libs\imgui\imgui_draw.cpp" />
@@ -171,13 +170,11 @@
     <ClCompile Include="libs\imgui\imgui_impl_vulkan.cpp" />
     <ClCompile Include="libs\imgui\imgui_tables.cpp" />
     <ClCompile Include="libs\imgui\imgui_widgets.cpp" />
-    <ClCompile Include="main.cpp" />
+    <ClCompile Include="src\hello_triangle.cpp" />
+    <ClCompile Include="src\imgui_manager.cpp" />
+    <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="constants.h" />
-    <ClInclude Include="debug_layer.h" />
-    <ClInclude Include="hello_triangle.h" />
-    <ClInclude Include="helpers.h" />
     <ClInclude Include="libs\imgui\imconfig.h" />
     <ClInclude Include="libs\imgui\imgui.h" />
     <ClInclude Include="libs\imgui\imgui_impl_glfw.h" />
@@ -186,13 +183,18 @@
     <ClInclude Include="libs\imgui\imstb_rectpack.h" />
     <ClInclude Include="libs\imgui\imstb_textedit.h" />
     <ClInclude Include="libs\imgui\imstb_truetype.h" />
-    <ClInclude Include="vertex.h" />
-    <ClInclude Include="vulkan_helper.h" />
+    <ClInclude Include="src\constants.h" />
+    <ClInclude Include="src\debug_layer.h" />
+    <ClInclude Include="src\hello_triangle.h" />
+    <ClInclude Include="src\helpers.h" />
+    <ClInclude Include="src\imgui_manager.h" />
+    <ClInclude Include="src\vertex.h" />
+    <ClInclude Include="src\vulkan_helper.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Shaders\compile.bat" />
-    <None Include="Shaders\fs.frag" />
-    <None Include="Shaders\vs.vert" />
+    <None Include="src\shaders\compile.bat" />
+    <None Include="src\shaders\fs.frag" />
+    <None Include="src\shaders\vs.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
