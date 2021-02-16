@@ -27,10 +27,8 @@ void HelloTriangle::Run()
 {
 	InitWindow();
 
-	m_vkManager = VulkanManager(m_window);
-	m_vkManager.Initialize();
-	
-	m_imguiManager.m_vkManager = m_vkManager;
+	VulkanManager::CreateVulkanManager(m_window);
+	VulkanManager::GetVulkanManager().Initialize();
 	
 	InitVulkan();
 	
@@ -51,7 +49,7 @@ void HelloTriangle::MainLoop()
 		DrawFrame();
 	}
 
-	vkDeviceWaitIdle(m_vkManager.GetDevice());
+	vkDeviceWaitIdle(VulkanManager::GetVulkanManager().GetDevice());
 }
 
 void HelloTriangle::DrawFrame()
@@ -65,10 +63,10 @@ void HelloTriangle::DrawFrame()
 	// -Fences used for syncing rendering
 	// -Semaphores used for syncing operations across command queues
 
-	vkWaitForFences(m_vkManager.GetDevice(), 1, &m_vkManager.GetInFlightFences()[m_currentFrame], VK_TRUE, UINT64_MAX);
+	vkWaitForFences(VulkanManager::GetVulkanManager().GetDevice(), 1, &VulkanManager::GetVulkanManager().GetInFlightFences()[m_currentFrame], VK_TRUE, UINT64_MAX);
 
 	uint32_t imageIndex;	// Store index of the image from the swap chain.
-	auto acquireResult = vkAcquireNextImageKHR(m_vkManager.GetDevice(), m_vkManager.GetSwapChain(), UINT64_MAX, m_vkManager.GetImageAvailableSemaphores()[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
+	auto acquireResult = vkAcquireNextImageKHR(VulkanManager::GetVulkanManager().GetDevice(), VulkanManager::GetVulkanManager().GetSwapChain(), UINT64_MAX, VulkanManager::GetVulkanManager().GetImageAvailableSemaphores()[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
 
 	// If swap chain is out of date or suboptimal, recreate it.
 	if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR || acquireResult == VK_SUBOPTIMAL_KHR)
@@ -89,17 +87,17 @@ void HelloTriangle::DrawFrame()
 	}
 
 	// Check if previous frame is using this image (waiting on a fence)
-	if (m_vkManager.GetImagesInFlight()[imageIndex] != VK_NULL_HANDLE)
+	if (VulkanManager::GetVulkanManager().GetImagesInFlight()[imageIndex] != VK_NULL_HANDLE)
 	{
-		vkWaitForFences(m_vkManager.GetDevice(), 1, &m_vkManager.GetImagesInFlight()[imageIndex], VK_TRUE, UINT64_MAX);
+		vkWaitForFences(VulkanManager::GetVulkanManager().GetDevice(), 1, &VulkanManager::GetVulkanManager().GetImagesInFlight()[imageIndex], VK_TRUE, UINT64_MAX);
 	}
 
 	// Mark image as being used
-	m_vkManager.GetImagesInFlight()[imageIndex] = m_vkManager.GetInFlightFences()[m_currentFrame];
+	VulkanManager::GetVulkanManager().GetImagesInFlight()[imageIndex] = VulkanManager::GetVulkanManager().GetInFlightFences()[m_currentFrame];
 
-	VkSemaphore waitSemaphores[] = { m_vkManager.GetImageAvailableSemaphores()[m_currentFrame] };
+	VkSemaphore waitSemaphores[] = { VulkanManager::GetVulkanManager().GetImageAvailableSemaphores()[m_currentFrame] };
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-	VkSemaphore signalSemaphores[] = { m_vkManager.GetRenderFinishedSemaphores()[m_currentFrame] };
+	VkSemaphore signalSemaphores[] = { VulkanManager::GetVulkanManager().GetRenderFinishedSemaphores()[m_currentFrame] };
 
 	// Update uniforms
 	UpdateUniformBuffers(imageIndex);
@@ -149,15 +147,15 @@ void HelloTriangle::DrawFrame()
 			submitInfo.pSignalSemaphores = signalSemaphores;
 		}
 
-		vkResetFences(m_vkManager.GetDevice(), 1, &m_vkManager.GetImagesInFlight()[m_currentFrame]);
+		vkResetFences(VulkanManager::GetVulkanManager().GetDevice(), 1, &VulkanManager::GetVulkanManager().GetImagesInFlight()[m_currentFrame]);
 
-		VK_ASSERT(vkQueueSubmit(m_vkManager.GetGraphicsQueue(), 1, &submitInfo, m_vkManager.GetImagesInFlight()[m_currentFrame]), "Failed to submit draw command buffer");
+		VK_ASSERT(vkQueueSubmit(VulkanManager::GetVulkanManager().GetGraphicsQueue(), 1, &submitInfo, VulkanManager::GetVulkanManager().GetImagesInFlight()[m_currentFrame]), "Failed to submit draw command buffer");
 	}
 	
 	// Present
 	// Submit result back to swap chain to show on screen.
 
-	VkSwapchainKHR swapChains[] = { m_vkManager.GetSwapChain() };
+	VkSwapchainKHR swapChains[] = { VulkanManager::GetVulkanManager().GetSwapChain() };
 	VkPresentInfoKHR presentInfo{};
 	{
 		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -179,10 +177,10 @@ void HelloTriangle::DrawFrame()
 		presentInfo.pResults = nullptr;
 	}
 
-	vkQueuePresentKHR(m_vkManager.GetPresentQueue(), &presentInfo);
+	vkQueuePresentKHR(VulkanManager::GetVulkanManager().GetPresentQueue(), &presentInfo);
 
 	// Wait for work to finish after submission.
-	vkQueueWaitIdle(m_vkManager.GetPresentQueue());
+	vkQueueWaitIdle(VulkanManager::GetVulkanManager().GetPresentQueue());
 
 	m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
@@ -230,21 +228,21 @@ void HelloTriangle::InitImGui()
 	// Setup Platform/Renderer bindings
 	ImGui_ImplGlfw_InitForVulkan(m_window, true);
 
-	auto queueFamily = m_vkManager.FindQueueFamilies(m_vkManager.GetPhysicalDevice());
-	auto swapChainSupport = m_vkManager.QuerySwapChainSupport(m_vkManager.GetPhysicalDevice());
+	auto queueFamily = VulkanManager::GetVulkanManager().FindQueueFamilies(VulkanManager::GetVulkanManager().GetPhysicalDevice());
+	auto swapChainSupport = VulkanManager::GetVulkanManager().QuerySwapChainSupport(VulkanManager::GetVulkanManager().GetPhysicalDevice());
 	
 	ImGui_ImplVulkan_InitInfo init_info = {};
 	{
-		init_info.Instance = m_vkManager.GetInstance();
-		init_info.PhysicalDevice = m_vkManager.GetPhysicalDevice();
-		init_info.Device = m_vkManager.GetDevice();
+		init_info.Instance = VulkanManager::GetVulkanManager().GetInstance();
+		init_info.PhysicalDevice = VulkanManager::GetVulkanManager().GetPhysicalDevice();
+		init_info.Device = VulkanManager::GetVulkanManager().GetDevice();
 		init_info.QueueFamily = queueFamily.graphicsFamily.value();
-		init_info.Queue = m_vkManager.GetGraphicsQueue();
+		init_info.Queue = VulkanManager::GetVulkanManager().GetGraphicsQueue();
 		init_info.PipelineCache = nullptr;
 		init_info.DescriptorPool = m_imguiManager.GetDescriptorPool();
 		init_info.Allocator = nullptr;
 		init_info.MinImageCount = swapChainSupport.capabilities.minImageCount + 1;
-		init_info.ImageCount = m_vkManager.NumSwapChainImages();
+		init_info.ImageCount = VulkanManager::GetVulkanManager().NumSwapChainImages();
 		init_info.CheckVkResultFn = nullptr;
 	}
 	ImGui_ImplVulkan_Init(&init_info, m_imguiManager.GetRenderPass());
@@ -253,7 +251,7 @@ void HelloTriangle::InitImGui()
 	{
 		// Use any command queue
 		VkCommandPool command_pool = m_imguiManager.GetCommandPool();
-		VK_ASSERT(vkResetCommandPool(m_vkManager.GetDevice(), command_pool, 0), "");
+		VK_ASSERT(vkResetCommandPool(VulkanManager::GetVulkanManager().GetDevice(), command_pool, 0), "");
 		
 		VkCommandBuffer command_buffer = m_imguiManager.GetCommandBuffers()[m_currentFrame];
 		
@@ -269,9 +267,9 @@ void HelloTriangle::InitImGui()
 		end_info.commandBufferCount = 1;
 		end_info.pCommandBuffers = &command_buffer;
 		vkEndCommandBuffer(command_buffer);
-		vkQueueSubmit(m_vkManager.GetGraphicsQueue(), 1, &end_info, VK_NULL_HANDLE);
+		vkQueueSubmit(VulkanManager::GetVulkanManager().GetGraphicsQueue(), 1, &end_info, VK_NULL_HANDLE);
 
-		vkDeviceWaitIdle(m_vkManager.GetDevice());
+		vkDeviceWaitIdle(VulkanManager::GetVulkanManager().GetDevice());
 		ImGui_ImplVulkan_DestroyFontUploadObjects();
 	}
 
@@ -309,7 +307,7 @@ VkFormat HelloTriangle::FindSupportedFormat(const std::vector<VkFormat>& candida
 	for (VkFormat format : candidates)
 	{
 		VkFormatProperties properties;
-		vkGetPhysicalDeviceFormatProperties(m_vkManager.GetPhysicalDevice(), format, &properties);
+		vkGetPhysicalDeviceFormatProperties(VulkanManager::GetVulkanManager().GetPhysicalDevice(), format, &properties);
 
 		if (tiling == VK_IMAGE_TILING_LINEAR && (properties.linearTilingFeatures & features) == features)
 		{
@@ -339,12 +337,12 @@ void HelloTriangle::RecreateSwapChain()
 		}
 	}
 	
-	vkDeviceWaitIdle(m_vkManager.GetDevice());
+	vkDeviceWaitIdle(VulkanManager::GetVulkanManager().GetDevice());
 
 	CleanupSwapChain();
 	
-	m_vkManager.CreateSwapChain();
-	m_vkManager.CreateImageViews();
+	VulkanManager::GetVulkanManager().CreateSwapChain();
+	VulkanManager::GetVulkanManager().CreateImageViews();
 	CreateRenderPasses();
 	CreateGraphicsPipeline();
 	CreateColorResources();
@@ -358,7 +356,7 @@ void HelloTriangle::RecreateSwapChain()
 
 //void HelloTriangle::CreateImageViews()
 //{
-//	m_vkManager.CreateImageViews();
+//	VulkanManager::GetVulkanManager().CreateImageViews();
 //}
 
 void HelloTriangle::CreateDescriptorSetLayout()
@@ -395,7 +393,7 @@ void HelloTriangle::CreateDescriptorSetLayout()
 		layoutInfo.pBindings = bindings.data();
 	}
 
-	VK_ASSERT(vkCreateDescriptorSetLayout(m_vkManager.GetDevice(), &layoutInfo, nullptr, &m_descriptorSetLayout), "Failed to create descriptor set layout");
+	VK_ASSERT(vkCreateDescriptorSetLayout(VulkanManager::GetVulkanManager().GetDevice(), &layoutInfo, nullptr, &m_descriptorSetLayout), "Failed to create descriptor set layout");
 }
 
 void HelloTriangle::CreateGraphicsPipeline()
@@ -458,8 +456,8 @@ void HelloTriangle::CreateGraphicsPipeline()
 	{
 		viewport.x = 0.0f;
 		viewport.y = 0.0f;
-		viewport.width = (float)m_vkManager.GetSwapChainExtent().width;
-		viewport.height = (float)m_vkManager.GetSwapChainExtent().height;
+		viewport.width = (float)VulkanManager::GetVulkanManager().GetSwapChainExtent().width;
+		viewport.height = (float)VulkanManager::GetVulkanManager().GetSwapChainExtent().height;
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 	}
@@ -470,7 +468,7 @@ void HelloTriangle::CreateGraphicsPipeline()
 	VkRect2D scissor{};
 	{
 		scissor.offset = { 0, 0 };
-		scissor.extent = m_vkManager.GetSwapChainExtent();
+		scissor.extent = VulkanManager::GetVulkanManager().GetSwapChainExtent();
 	}
 	
 	// Create the viewport
@@ -506,7 +504,7 @@ void HelloTriangle::CreateGraphicsPipeline()
 	{
 		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 		multisampling.sampleShadingEnable = VK_FALSE;
-		multisampling.rasterizationSamples = m_vkManager.GetMSAASamples();
+		multisampling.rasterizationSamples = VulkanManager::GetVulkanManager().GetMSAASamples();
 		multisampling.minSampleShading = 1.0f;
 		multisampling.pSampleMask = nullptr;
 		multisampling.alphaToCoverageEnable = VK_FALSE;
@@ -593,7 +591,7 @@ void HelloTriangle::CreateGraphicsPipeline()
 		pipelineLayoutInfo.pPushConstantRanges = nullptr;
 	}
 
-	VK_ASSERT(vkCreatePipelineLayout(m_vkManager.GetDevice(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout), "Failed to create pipeline layout");
+	VK_ASSERT(vkCreatePipelineLayout(VulkanManager::GetVulkanManager().GetDevice(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout), "Failed to create pipeline layout");
 
 	// Create graphics pipeline
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
@@ -630,10 +628,10 @@ void HelloTriangle::CreateGraphicsPipeline()
 		pipelineInfo.pDepthStencilState = &depthStencil;
 	}
 
-	VK_ASSERT(vkCreateGraphicsPipelines(m_vkManager.GetDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_graphicsPipeline), "Failed to create a graphics pipeline");
+	VK_ASSERT(vkCreateGraphicsPipelines(VulkanManager::GetVulkanManager().GetDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_graphicsPipeline), "Failed to create a graphics pipeline");
 	
-	vkDestroyShaderModule(m_vkManager.GetDevice(), vsModule, nullptr);
-	vkDestroyShaderModule(m_vkManager.GetDevice(), fsModule, nullptr);
+	vkDestroyShaderModule(VulkanManager::GetVulkanManager().GetDevice(), vsModule, nullptr);
+	vkDestroyShaderModule(VulkanManager::GetVulkanManager().GetDevice(), fsModule, nullptr);
 }
 
 VkShaderModule HelloTriangle::CreateShaderModule(const std::vector<char>& code)
@@ -648,7 +646,7 @@ VkShaderModule HelloTriangle::CreateShaderModule(const std::vector<char>& code)
 	}
 
 	VkShaderModule shaderModule;
-	if (vkCreateShaderModule(m_vkManager.GetDevice(), &createInfo, nullptr, &shaderModule))
+	if (vkCreateShaderModule(VulkanManager::GetVulkanManager().GetDevice(), &createInfo, nullptr, &shaderModule))
 	{
 		throw std::runtime_error("Failed to create shader module");
 	}
@@ -674,9 +672,9 @@ void HelloTriangle::CreateRenderPass()
 	VkAttachmentDescription colorAttachment{};
 	CreateAttachmentDescription(
 		colorAttachment,
-		m_vkManager.GetSwapChainImageFormat(),
+		VulkanManager::GetVulkanManager().GetSwapChainImageFormat(),
 		0,
-		m_vkManager.GetMSAASamples(), 
+		VulkanManager::GetVulkanManager().GetMSAASamples(), 
 		VK_ATTACHMENT_LOAD_OP_CLEAR,				// Clear buffer for next frame.
 		VK_ATTACHMENT_STORE_OP_STORE,				// Save for later since we want to see the triangle.
 		VK_ATTACHMENT_LOAD_OP_DONT_CARE,			// Clear buffer for next frame.
@@ -690,7 +688,7 @@ void HelloTriangle::CreateRenderPass()
 		depthAttachment,
 		FindDepthFormat(),
 		0,
-		m_vkManager.GetMSAASamples(),
+		VulkanManager::GetVulkanManager().GetMSAASamples(),
 		VK_ATTACHMENT_LOAD_OP_CLEAR,
 		VK_ATTACHMENT_STORE_OP_DONT_CARE,
 		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
@@ -704,7 +702,7 @@ void HelloTriangle::CreateRenderPass()
 	VkAttachmentDescription colorAttachmentResolve{};
 	CreateAttachmentDescription(
 		colorAttachmentResolve,
-		m_vkManager.GetSwapChainImageFormat(),
+		VulkanManager::GetVulkanManager().GetSwapChainImageFormat(),
 		0,
 		VK_SAMPLE_COUNT_1_BIT,
 		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
@@ -772,23 +770,23 @@ void HelloTriangle::CreateRenderPass()
 		renderPassInfo.pDependencies = &dependency;
 	}
 
-	VK_ASSERT(vkCreateRenderPass(m_vkManager.GetDevice(), &renderPassInfo, nullptr, &m_renderPass), "Failed to create render pass");
+	VK_ASSERT(vkCreateRenderPass(VulkanManager::GetVulkanManager().GetDevice(), &renderPassInfo, nullptr, &m_renderPass), "Failed to create render pass");
 }
 
 void HelloTriangle::CreateFrameBuffers()
 {
 	// Each FBO will need to reference each of the image view objects.
 
-	m_swapChainFrameBuffers.resize(m_vkManager.GetSwapChainImageViews().size());
-	m_imguiManager.GetFrameBuffers().resize(m_vkManager.GetSwapChainImageViews().size());
+	m_swapChainFrameBuffers.resize(VulkanManager::GetVulkanManager().GetSwapChainImageViews().size());
+	m_imguiManager.GetFrameBuffers().resize(VulkanManager::GetVulkanManager().GetSwapChainImageViews().size());
 
 	// Iterate over all of the views to Get a frame buffer for them.
-	for (auto i = 0; i < m_vkManager.GetSwapChainImageViews().size(); ++i)
+	for (auto i = 0; i < VulkanManager::GetVulkanManager().GetSwapChainImageViews().size(); ++i)
 	{
 		std::array<VkImageView, 3> attachments = {
 			m_colorImageView,
 			m_depthImageView,
-			m_vkManager.GetSwapChainImageViews()[i],
+			VulkanManager::GetVulkanManager().GetSwapChainImageViews()[i],
 		};
 
 		// Frame buffers can only be used with compatible render passes.
@@ -800,12 +798,12 @@ void HelloTriangle::CreateFrameBuffers()
 			frameBufferInfo.renderPass = m_renderPass;
 			frameBufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
 			frameBufferInfo.pAttachments = attachments.data();
-			frameBufferInfo.width = m_vkManager.GetSwapChainExtent().width;
-			frameBufferInfo.height = m_vkManager.GetSwapChainExtent().height;
+			frameBufferInfo.width = VulkanManager::GetVulkanManager().GetSwapChainExtent().width;
+			frameBufferInfo.height = VulkanManager::GetVulkanManager().GetSwapChainExtent().height;
 			frameBufferInfo.layers = 1;
 		}
 
-		VK_ASSERT(vkCreateFramebuffer(m_vkManager.GetDevice(), &frameBufferInfo, nullptr, &m_swapChainFrameBuffers[i]), "Failed to create frame buffer");
+		VK_ASSERT(vkCreateFramebuffer(VulkanManager::GetVulkanManager().GetDevice(), &frameBufferInfo, nullptr, &m_swapChainFrameBuffers[i]), "Failed to create frame buffer");
 	}
 
 #if IMGUI_ENABLED
@@ -816,13 +814,13 @@ void HelloTriangle::CreateFrameBuffers()
 		info.renderPass = m_imguiManager.GetRenderPass();
 		info.attachmentCount = 1;
 		info.pAttachments = attachment;
-		info.width = m_vkManager.GetSwapChainExtent().width;
-		info.height = m_vkManager.GetSwapChainExtent().height;
+		info.width = VulkanManager::GetVulkanManager().GetSwapChainExtent().width;
+		info.height = VulkanManager::GetVulkanManager().GetSwapChainExtent().height;
 		info.layers = 1;
 		for (uint32_t i = 0; i < m_imguiManager.GetFrameBuffers().size(); ++i)
 		{
-			attachment[0] = m_vkManager.GetSwapChainImageViews()[i];
-			vkCreateFramebuffer(m_vkManager.GetDevice(), &info, nullptr, &m_imguiManager.GetFrameBuffers()[i]);
+			attachment[0] = VulkanManager::GetVulkanManager().GetSwapChainImageViews()[i];
+			vkCreateFramebuffer(VulkanManager::GetVulkanManager().GetDevice(), &info, nullptr, &m_imguiManager.GetFrameBuffers()[i]);
 		}
 	}
 #endif
@@ -830,7 +828,7 @@ void HelloTriangle::CreateFrameBuffers()
 
 void HelloTriangle::CreateCommandPool()
 {
-	auto queueFamilyIndices = m_vkManager.FindQueueFamilies(m_vkManager.GetPhysicalDevice());
+	auto queueFamilyIndices = VulkanManager::GetVulkanManager().FindQueueFamilies(VulkanManager::GetVulkanManager().GetPhysicalDevice());
 
 	VkCommandPoolCreateInfo poolInfo{};
 	{
@@ -839,7 +837,7 @@ void HelloTriangle::CreateCommandPool()
 		poolInfo.flags = 0;
 	}
 
-	VK_ASSERT(vkCreateCommandPool(m_vkManager.GetDevice(), &poolInfo, nullptr, &m_commandPool), "Failed to create command pool");
+	VK_ASSERT(vkCreateCommandPool(VulkanManager::GetVulkanManager().GetDevice(), &poolInfo, nullptr, &m_commandPool), "Failed to create command pool");
 }
 
 void HelloTriangle::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& memory)
@@ -853,13 +851,13 @@ void HelloTriangle::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, Vk
 		// Buffers can be owned by specific queue families or shared between multiple families.
 		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;	// We are using this buffer from the graphics queue.
 
-		VK_ASSERT(vkCreateBuffer(m_vkManager.GetDevice(), &bufferInfo, nullptr, &buffer), "Failed to create vertex buffer");
+		VK_ASSERT(vkCreateBuffer(VulkanManager::GetVulkanManager().GetDevice(), &bufferInfo, nullptr, &buffer), "Failed to create vertex buffer");
 	}
 
 	// Figure out how much memory we need to load -----
 	VkMemoryRequirements memoryRequirements;
 	{
-		vkGetBufferMemoryRequirements(m_vkManager.GetDevice(), buffer, &memoryRequirements);
+		vkGetBufferMemoryRequirements(VulkanManager::GetVulkanManager().GetDevice(), buffer, &memoryRequirements);
 	}
 	
 	// Memory allocation -----
@@ -871,13 +869,13 @@ void HelloTriangle::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, Vk
 		allocInfo.memoryTypeIndex = FindMemoryType(memoryRequirements.memoryTypeBits, properties);
 
 		// Store handle to memory
-		VK_ASSERT(vkAllocateMemory(m_vkManager.GetDevice(), &allocInfo, nullptr, &memory), "Failed to allocate vertex buffer memory");
+		VK_ASSERT(vkAllocateMemory(VulkanManager::GetVulkanManager().GetDevice(), &allocInfo, nullptr, &memory), "Failed to allocate vertex buffer memory");
 	}
 
 	// Bind the buffer memory -----
 	// We're allocating specifically for this vertex buffer, no offset.
 	// Offset has to be divisible by memoryRequirements.alignment otherwise.
-	VK_ASSERT(vkBindBufferMemory(m_vkManager.GetDevice(), buffer, memory, 0), "Failed to bind vertex buffer");
+	VK_ASSERT(vkBindBufferMemory(VulkanManager::GetVulkanManager().GetDevice(), buffer, memory, 0), "Failed to bind vertex buffer");
 }
 
 // Copy from srcBuffer to dstBuffer.
@@ -954,13 +952,13 @@ void HelloTriangle::CreateVertexBuffer()
 	void* data;
 	{
 		// Map buffer memory into CPU accessible memory.
-		VK_ASSERT(vkMapMemory(m_vkManager.GetDevice(), stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map data to vertex buffer");
+		VK_ASSERT(vkMapMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map data to vertex buffer");
 		
 		// Copy data over
 		memcpy(data, m_vertices.data(), (size_t)bufferSize);
 		
 		// Unmap
-		vkUnmapMemory(m_vkManager.GetDevice(), stagingBufferMemory);
+		vkUnmapMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory);
 	}
 
 	// VK_BUFFER_USAGE_TRANSFER_DST_BIT - Use this buffer as the destination in transferring memory.
@@ -973,8 +971,8 @@ void HelloTriangle::CreateVertexBuffer()
 
 	// Destroy staging buffer
 	{
-		vkDestroyBuffer(m_vkManager.GetDevice(), stagingBuffer, nullptr);
-		vkFreeMemory(m_vkManager.GetDevice(), stagingBufferMemory, nullptr);
+		vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), stagingBuffer, nullptr);
+		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory, nullptr);
 	}
 }
 
@@ -994,13 +992,13 @@ void HelloTriangle::CreateIndexBuffer()
 	void* data;
 	{
 		// Map buffer memory into CPU accessible memory.
-		VK_ASSERT(vkMapMemory(m_vkManager.GetDevice(), stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map data to index buffer");
+		VK_ASSERT(vkMapMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map data to index buffer");
 
 		// Copy data over
 		memcpy(data, m_indices.data(), (size_t)bufferSize);
 
 		// Unmap
-		vkUnmapMemory(m_vkManager.GetDevice(), stagingBufferMemory);
+		vkUnmapMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory);
 	}
 
 	// VK_BUFFER_USAGE_TRANSFER_DST_BIT - Use this buffer as the destination in transferring memory.
@@ -1017,8 +1015,8 @@ void HelloTriangle::CreateIndexBuffer()
 
 	// Destroy staging buffer
 	{
-		vkDestroyBuffer(m_vkManager.GetDevice(), stagingBuffer, nullptr);
-		vkFreeMemory(m_vkManager.GetDevice(), stagingBufferMemory, nullptr);
+		vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), stagingBuffer, nullptr);
+		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory, nullptr);
 	}
 }
 
@@ -1031,25 +1029,25 @@ void HelloTriangle::UpdateUniformBuffers(uint32_t currentImage)
 	{
 		ubo.model = glm::rotate(glm::mat4(1), time * glm::radians(0.0f), glm::vec3(0, 0, 1));
 		ubo.view = glm::lookAt(glm::vec3(2, 2, 2), glm::vec3(0), glm::vec3(0, 0, 1));
-		ubo.proj = glm::perspective(glm::radians(45.0f), (float)m_vkManager.GetSwapChainExtent().width / (float)m_vkManager.GetSwapChainExtent().height, 0.1f, 10.0f);
+		ubo.proj = glm::perspective(glm::radians(45.0f), (float)VulkanManager::GetVulkanManager().GetSwapChainExtent().width / (float)VulkanManager::GetVulkanManager().GetSwapChainExtent().height, 0.1f, 10.0f);
 		ubo.proj[1][1] *= -1.0f;
 	}
 
 	void* data;
-	VK_ASSERT(vkMapMemory(m_vkManager.GetDevice(), m_uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data), "Couldn't map uniform buffer");
+	VK_ASSERT(vkMapMemory(VulkanManager::GetVulkanManager().GetDevice(), m_uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data), "Couldn't map uniform buffer");
 	memcpy(data, &ubo, sizeof(ubo));
-	vkUnmapMemory(m_vkManager.GetDevice(), m_uniformBuffersMemory[currentImage]);
+	vkUnmapMemory(VulkanManager::GetVulkanManager().GetDevice(), m_uniformBuffersMemory[currentImage]);
 }
 
 void HelloTriangle::CreateUniformBuffers()
 {
 	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 	{
-		m_uniformBuffers.resize(m_vkManager.GetSwapChainImages().size());
-		m_uniformBuffersMemory.resize(m_vkManager.GetSwapChainImages().size());
+		m_uniformBuffers.resize(VulkanManager::GetVulkanManager().GetSwapChainImages().size());
+		m_uniformBuffersMemory.resize(VulkanManager::GetVulkanManager().GetSwapChainImages().size());
 	}
 
-	for (size_t i = 0; i < m_vkManager.GetSwapChainImages().size(); ++i)
+	for (size_t i = 0; i < VulkanManager::GetVulkanManager().GetSwapChainImages().size(); ++i)
 	{
 		CreateBuffer(bufferSize, 
 			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
@@ -1075,35 +1073,35 @@ void HelloTriangle::CreateMainDescriptorPool()
 	std::array<VkDescriptorPoolSize, 2> poolSizes{};
 	{
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		poolSizes[0].descriptorCount = static_cast<uint32_t>(m_vkManager.GetSwapChainImages().size());
+		poolSizes[0].descriptorCount = static_cast<uint32_t>(VulkanManager::GetVulkanManager().GetSwapChainImages().size());
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		poolSizes[1].descriptorCount = static_cast<uint32_t>(m_vkManager.GetSwapChainImages().size());
+		poolSizes[1].descriptorCount = static_cast<uint32_t>(VulkanManager::GetVulkanManager().GetSwapChainImages().size());
 	}
 
 	// Allocate one descriptor every frame.
-	VKCreateDescriptorPool(m_vkManager.GetDevice(), &m_descriptorPool, poolSizes.data(), static_cast<uint32_t>(poolSizes.size()), static_cast<uint32_t>(m_vkManager.NumSwapChainImages()));
+	VKCreateDescriptorPool(VulkanManager::GetVulkanManager().GetDevice(), &m_descriptorPool, poolSizes.data(), static_cast<uint32_t>(poolSizes.size()), static_cast<uint32_t>(VulkanManager::GetVulkanManager().NumSwapChainImages()));
 }
 
 void HelloTriangle::CreateDescriptorSets()
 {
-	std::vector<VkDescriptorSetLayout> layouts(m_vkManager.GetSwapChainImages().size(), m_descriptorSetLayout);
+	std::vector<VkDescriptorSetLayout> layouts(VulkanManager::GetVulkanManager().GetSwapChainImages().size(), m_descriptorSetLayout);
 
 	VkDescriptorSetAllocateInfo allocInfo{};
 	{
 		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 		allocInfo.descriptorPool = m_descriptorPool;
-		allocInfo.descriptorSetCount = static_cast<uint32_t>(m_vkManager.GetSwapChainImages().size());
+		allocInfo.descriptorSetCount = static_cast<uint32_t>(VulkanManager::GetVulkanManager().GetSwapChainImages().size());
 		allocInfo.pSetLayouts = layouts.data();
 	}
 
 	// Create one descriptor for each image in the swap chain.
-	m_descriptorSets.resize(m_vkManager.GetSwapChainImages().size());
+	m_descriptorSets.resize(VulkanManager::GetVulkanManager().GetSwapChainImages().size());
 
 	// Each descriptor set that gets allocated will also get a uniform buffer descriptor.
-	VK_ASSERT(vkAllocateDescriptorSets(m_vkManager.GetDevice(), &allocInfo, m_descriptorSets.data()), "Failed to allocate descriptor sets");
+	VK_ASSERT(vkAllocateDescriptorSets(VulkanManager::GetVulkanManager().GetDevice(), &allocInfo, m_descriptorSets.data()), "Failed to allocate descriptor sets");
 
 	// Configure descriptor sets.
-	for (size_t i = 0; i < m_vkManager.NumSwapChainImages(); ++i)
+	for (size_t i = 0; i < VulkanManager::GetVulkanManager().NumSwapChainImages(); ++i)
 	{
 		// Specify which buffer we want the descriptor to refer to.
 		VkDescriptorBufferInfo bufferInfo{};
@@ -1146,7 +1144,7 @@ void HelloTriangle::CreateDescriptorSets()
 		}
 		
 		// Update the descriptor set
-		vkUpdateDescriptorSets(m_vkManager.GetDevice(), static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+		vkUpdateDescriptorSets(VulkanManager::GetVulkanManager().GetDevice(), static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 	}
 }
 
@@ -1155,7 +1153,7 @@ uint32_t HelloTriangle::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlag
 	// Query the types of memory
 
 	VkPhysicalDeviceMemoryProperties memoryProperties;
-	vkGetPhysicalDeviceMemoryProperties(m_vkManager.GetPhysicalDevice(), &memoryProperties);
+	vkGetPhysicalDeviceMemoryProperties(VulkanManager::GetVulkanManager().GetPhysicalDevice(), &memoryProperties);
 
 	// Find the memory type that is suitable with the buffer and make sure it has the properties to do so.
 	for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i)
@@ -1191,7 +1189,7 @@ void HelloTriangle::CreateCommandBuffers()
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;	// Submit to queue for execution but cannot be called from other command buffers (secondary).
 		allocInfo.commandBufferCount = (uint32_t)m_commandBuffers.size();
 
-		VK_ASSERT(vkAllocateCommandBuffers(m_vkManager.GetDevice(), &allocInfo, m_commandBuffers.data()), "Failed to allocate command buffers");
+		VK_ASSERT(vkAllocateCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), &allocInfo, m_commandBuffers.data()), "Failed to allocate command buffers");
 	}
 
 	// Starting command buffer recording
@@ -1214,7 +1212,7 @@ void HelloTriangle::CreateCommandBuffers()
 			renderPassInfo.renderPass = m_renderPass;
 			renderPassInfo.framebuffer = m_swapChainFrameBuffers[i];
 			renderPassInfo.renderArea.offset = {0, 0};
-			renderPassInfo.renderArea.extent = m_vkManager.GetSwapChainExtent();
+			renderPassInfo.renderArea.extent = VulkanManager::GetVulkanManager().GetSwapChainExtent();
 
 			renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 			renderPassInfo.pClearValues = clearValues.data();
@@ -1267,7 +1265,7 @@ VkCommandBuffer HelloTriangle::BeginSingleTimeCommands()
 	}
 
 	VkCommandBuffer commandBuffer;
-	VK_ASSERT(vkAllocateCommandBuffers(m_vkManager.GetDevice(), &allocInfo, &commandBuffer), "Failed to allocate command buffers");
+	VK_ASSERT(vkAllocateCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), &allocInfo, &commandBuffer), "Failed to allocate command buffers");
 
 	VkCommandBufferBeginInfo beginInfo{};
 	{
@@ -1292,12 +1290,12 @@ void HelloTriangle::EndSingleTimeCommands(VkCommandBuffer commandBuffer)
 		submitInfo.pCommandBuffers = &commandBuffer;
 	}
 
-	VK_ASSERT(vkQueueSubmit(m_vkManager.GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE), "Failed to submit queue");
+	VK_ASSERT(vkQueueSubmit(VulkanManager::GetVulkanManager().GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE), "Failed to submit queue");
 
 	// Wait for the transfer to finish.
-	VK_ASSERT(vkQueueWaitIdle(m_vkManager.GetGraphicsQueue()), "Failed to wait");
+	VK_ASSERT(vkQueueWaitIdle(VulkanManager::GetVulkanManager().GetGraphicsQueue()), "Failed to wait");
 
-	vkFreeCommandBuffers(m_vkManager.GetDevice(), m_commandPool, 1, &commandBuffer);
+	vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool, 1, &commandBuffer);
 }
 
 void HelloTriangle::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples,
@@ -1322,10 +1320,10 @@ void HelloTriangle::CreateImage(uint32_t width, uint32_t height, uint32_t mipLev
 	}
 
 	// Create the image
-	VK_ASSERT(vkCreateImage(m_vkManager.GetDevice(), &imageInfo, nullptr, &image), "Failed to create image");
+	VK_ASSERT(vkCreateImage(VulkanManager::GetVulkanManager().GetDevice(), &imageInfo, nullptr, &image), "Failed to create image");
 
 	VkMemoryRequirements memoryRequirements{};
-	vkGetImageMemoryRequirements(m_vkManager.GetDevice(), image, &memoryRequirements);
+	vkGetImageMemoryRequirements(VulkanManager::GetVulkanManager().GetDevice(), image, &memoryRequirements);
 
 	VkMemoryAllocateInfo allocInfo{};
 	{
@@ -1334,9 +1332,9 @@ void HelloTriangle::CreateImage(uint32_t width, uint32_t height, uint32_t mipLev
 		allocInfo.memoryTypeIndex = FindMemoryType(memoryRequirements.memoryTypeBits, properties);
 	}
 
-	VK_ASSERT(vkAllocateMemory(m_vkManager.GetDevice(), &allocInfo, nullptr, &imageMemory), "Failed to allocate image memory");
+	VK_ASSERT(vkAllocateMemory(VulkanManager::GetVulkanManager().GetDevice(), &allocInfo, nullptr, &imageMemory), "Failed to allocate image memory");
 
-	vkBindImageMemory(m_vkManager.GetDevice(), image, imageMemory, 0);
+	vkBindImageMemory(VulkanManager::GetVulkanManager().GetDevice(), image, imageMemory, 0);
 }
 
 void HelloTriangle::CreateTextureImage()
@@ -1377,9 +1375,9 @@ void HelloTriangle::CreateTextureImage()
 	// Map to temp buffer
 	{
 		void* data;
-		VK_ASSERT(vkMapMemory(m_vkManager.GetDevice(), stagingBufferMemory, 0, imageSize, 0, &data), "Failed to map buffer");
+		VK_ASSERT(vkMapMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory, 0, imageSize, 0, &data), "Failed to map buffer");
 		memcpy(data, pixels, static_cast<size_t>(imageSize));
-		vkUnmapMemory(m_vkManager.GetDevice(), stagingBufferMemory);
+		vkUnmapMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory);
 	}
 
 	// We loaded everything into data so we can now clean up pixels.
@@ -1403,8 +1401,8 @@ void HelloTriangle::CreateTextureImage()
 	TransitionImageLayout(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, m_mipLevels);
 	CopyBufferToImage(stagingBuffer, m_textureImage, texWidth, texHeight);
 
-	vkDestroyBuffer(m_vkManager.GetDevice(), stagingBuffer, nullptr);
-	vkFreeMemory(m_vkManager.GetDevice()	, stagingBufferMemory, nullptr);
+	vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), stagingBuffer, nullptr);
+	vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice()	, stagingBufferMemory, nullptr);
 	
 	// Generating mipmaps transitions the layout to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL.
 	GenerateMipmaps(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, texWidth, texHeight, m_mipLevels);
@@ -1506,7 +1504,7 @@ void HelloTriangle::TransitionImageLayout(VkImage image, VkFormat format, VkImag
 void HelloTriangle::CreateTextureImageView()
 {
 	// Create a view in order to access images just like with the swap chain.
-	m_textureImageView = m_vkManager.CreateImageView(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, m_mipLevels);
+	m_textureImageView = VulkanManager::GetVulkanManager().CreateImageView(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, m_mipLevels);
 }
 
 void HelloTriangle::CreateTextureSampler()
@@ -1515,7 +1513,7 @@ void HelloTriangle::CreateTextureSampler()
 	// Samplers will apply filtering and transformations.
 
 	VkPhysicalDeviceProperties properties{};
-	vkGetPhysicalDeviceProperties(m_vkManager.GetPhysicalDevice(), &properties);
+	vkGetPhysicalDeviceProperties(VulkanManager::GetVulkanManager().GetPhysicalDevice(), &properties);
 	
 	VkSamplerCreateInfo samplerInfo{};
 	{
@@ -1563,14 +1561,14 @@ void HelloTriangle::CreateTextureSampler()
 
 	// The sampler is distinct from the image. The sampler is a way to get data from a texture so we don't need to ref the image here.
 	// This is different than other APIs which requires referring to the actual image.
-	VK_ASSERT(vkCreateSampler(m_vkManager.GetDevice(), &samplerInfo, nullptr, &m_textureSampler), "Couldn't create texture sampler");
+	VK_ASSERT(vkCreateSampler(VulkanManager::GetVulkanManager().GetDevice(), &samplerInfo, nullptr, &m_textureSampler), "Couldn't create texture sampler");
 }
 
 void HelloTriangle::GenerateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels)
 {
 	// Check if format supports linear blitting. Not all platforms support this.
 	VkFormatProperties formatProperties;
-	vkGetPhysicalDeviceFormatProperties(m_vkManager.GetPhysicalDevice(), imageFormat, &formatProperties);
+	vkGetPhysicalDeviceFormatProperties(VulkanManager::GetVulkanManager().GetPhysicalDevice(), imageFormat, &formatProperties);
 
 	if (!(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT))
 	{
@@ -1704,16 +1702,16 @@ void HelloTriangle::CreateDepthResources()
 {
 	VkFormat depthFormat = FindDepthFormat();
 
-	CreateImage(	m_vkManager.GetSwapChainExtent().width, 
-	                m_vkManager.GetSwapChainExtent().height,
+	CreateImage(	VulkanManager::GetVulkanManager().GetSwapChainExtent().width, 
+	                VulkanManager::GetVulkanManager().GetSwapChainExtent().height,
 	                1,
-	                m_vkManager.GetMSAASamples(), 
+	                VulkanManager::GetVulkanManager().GetMSAASamples(), 
 	                depthFormat,
 	                VK_IMAGE_TILING_OPTIMAL, 
 	                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 
 	                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_depthImage, m_depthImageMemory);
 
-	m_depthImageView = m_vkManager.CreateImageView(m_depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+	m_depthImageView = VulkanManager::GetVulkanManager().CreateImageView(m_depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 
 	TransitionImageLayout(m_depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
 }
@@ -1735,12 +1733,12 @@ void HelloTriangle::CreateColorResources()
 {
 	// Create multisampled color buffer
 
-	VkFormat colorFormat = m_vkManager.GetSwapChainImageFormat();
+	VkFormat colorFormat = VulkanManager::GetVulkanManager().GetSwapChainImageFormat();
 
 	CreateImage(
-		m_vkManager.GetSwapChainExtent().width, 
-		m_vkManager.GetSwapChainExtent().height,
-		1, m_vkManager.GetMSAASamples(), 
+		VulkanManager::GetVulkanManager().GetSwapChainExtent().width, 
+		VulkanManager::GetVulkanManager().GetSwapChainExtent().height,
+		1, VulkanManager::GetVulkanManager().GetMSAASamples(), 
 		colorFormat, 
 		VK_IMAGE_TILING_OPTIMAL, 
 		VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
@@ -1748,86 +1746,86 @@ void HelloTriangle::CreateColorResources()
 		m_colorImage, 
 		m_colorImageMemory);
 
-	m_colorImageView = m_vkManager.CreateImageView(m_colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+	m_colorImageView = VulkanManager::GetVulkanManager().CreateImageView(m_colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 }
 
 void HelloTriangle::CleanupSwapChain()
 {
 	m_imguiManager.Cleanup();
 	
-	vkDestroyImageView(m_vkManager.GetDevice(), m_colorImageView, nullptr);
-	vkDestroyImage(m_vkManager.GetDevice(), m_colorImage, nullptr);
-	vkFreeMemory(m_vkManager.GetDevice(), m_colorImageMemory, nullptr);
+	vkDestroyImageView(VulkanManager::GetVulkanManager().GetDevice(), m_colorImageView, nullptr);
+	vkDestroyImage(VulkanManager::GetVulkanManager().GetDevice(), m_colorImage, nullptr);
+	vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_colorImageMemory, nullptr);
 	
-	vkDestroyImageView(m_vkManager.GetDevice(), m_depthImageView, nullptr);
-	vkDestroyImage(m_vkManager.GetDevice(), m_depthImage, nullptr);
-	vkFreeMemory(m_vkManager.GetDevice(), m_depthImageMemory, nullptr);
+	vkDestroyImageView(VulkanManager::GetVulkanManager().GetDevice(), m_depthImageView, nullptr);
+	vkDestroyImage(VulkanManager::GetVulkanManager().GetDevice(), m_depthImage, nullptr);
+	vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_depthImageMemory, nullptr);
 	
 	for (auto& framebuffer : m_swapChainFrameBuffers)
 	{
-		vkDestroyFramebuffer(m_vkManager.GetDevice(), framebuffer, nullptr);
+		vkDestroyFramebuffer(VulkanManager::GetVulkanManager().GetDevice(), framebuffer, nullptr);
 	}
 
-	vkFreeCommandBuffers(m_vkManager.GetDevice(), m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
+	vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
 
-	vkDestroyPipeline(m_vkManager.GetDevice(), m_graphicsPipeline, nullptr);
-	vkDestroyPipelineLayout(m_vkManager.GetDevice(), m_pipelineLayout, nullptr);
-	vkDestroyRenderPass(m_vkManager.GetDevice(), m_renderPass, nullptr);
+	vkDestroyPipeline(VulkanManager::GetVulkanManager().GetDevice(), m_graphicsPipeline, nullptr);
+	vkDestroyPipelineLayout(VulkanManager::GetVulkanManager().GetDevice(), m_pipelineLayout, nullptr);
+	vkDestroyRenderPass(VulkanManager::GetVulkanManager().GetDevice(), m_renderPass, nullptr);
 
-	for (auto& imageView : m_vkManager.GetSwapChainImageViews())
+	for (auto& imageView : VulkanManager::GetVulkanManager().GetSwapChainImageViews())
 	{
-		vkDestroyImageView(m_vkManager.GetDevice(), imageView, nullptr);
+		vkDestroyImageView(VulkanManager::GetVulkanManager().GetDevice(), imageView, nullptr);
 	}
 
-	vkDestroySwapchainKHR(m_vkManager.GetDevice(), m_vkManager.GetSwapChain(), nullptr);
+	vkDestroySwapchainKHR(VulkanManager::GetVulkanManager().GetDevice(), VulkanManager::GetVulkanManager().GetSwapChain(), nullptr);
 
-	for (size_t i = 0; i < m_vkManager.GetSwapChainImages().size(); ++i)
+	for (size_t i = 0; i < VulkanManager::GetVulkanManager().GetSwapChainImages().size(); ++i)
 	{
-		vkDestroyBuffer(m_vkManager.GetDevice(), m_uniformBuffers[i], nullptr);
-		vkFreeMemory(m_vkManager.GetDevice(), m_uniformBuffersMemory[i], nullptr);
+		vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), m_uniformBuffers[i], nullptr);
+		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_uniformBuffersMemory[i], nullptr);
 	}
 
-	vkDestroyDescriptorPool(m_vkManager.GetDevice(), m_descriptorPool, nullptr);
+	vkDestroyDescriptorPool(VulkanManager::GetVulkanManager().GetDevice(), m_descriptorPool, nullptr);
 }
 
 void HelloTriangle::Cleanup()
 {
 	CleanupSwapChain();
 
-	vkDestroySampler(m_vkManager.GetDevice(), m_textureSampler, nullptr);
-	vkDestroyImageView(m_vkManager.GetDevice(), m_textureImageView, nullptr);
-	vkDestroyImage(m_vkManager.GetDevice(), m_textureImage, nullptr);
-	vkFreeMemory(m_vkManager.GetDevice(), m_textureImageMemory, nullptr);
+	vkDestroySampler(VulkanManager::GetVulkanManager().GetDevice(), m_textureSampler, nullptr);
+	vkDestroyImageView(VulkanManager::GetVulkanManager().GetDevice(), m_textureImageView, nullptr);
+	vkDestroyImage(VulkanManager::GetVulkanManager().GetDevice(), m_textureImage, nullptr);
+	vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_textureImageMemory, nullptr);
 
-	vkDestroyDescriptorSetLayout(m_vkManager.GetDevice(), m_descriptorSetLayout, nullptr);
+	vkDestroyDescriptorSetLayout(VulkanManager::GetVulkanManager().GetDevice(), m_descriptorSetLayout, nullptr);
 	
-	vkDestroyBuffer(m_vkManager.GetDevice(), m_vertexBuffer, nullptr);
-	vkFreeMemory(m_vkManager.GetDevice(), m_vertexBufferMemory, nullptr);
+	vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), m_vertexBuffer, nullptr);
+	vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_vertexBufferMemory, nullptr);
 
-	vkDestroyBuffer(m_vkManager.GetDevice(), m_indexBuffer, nullptr);
-	vkFreeMemory(m_vkManager.GetDevice(), m_indexBufferMemory, nullptr);
+	vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), m_indexBuffer, nullptr);
+	vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_indexBufferMemory, nullptr);
 	
 	for(auto i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 	{
-		vkDestroySemaphore(m_vkManager.GetDevice(), m_vkManager.GetImageAvailableSemaphores()[i], nullptr);
-		vkDestroySemaphore(m_vkManager.GetDevice(), m_vkManager.GetRenderFinishedSemaphores()[i], nullptr);
-		vkDestroyFence(m_vkManager.GetDevice(), m_vkManager.GetInFlightFences()[i], nullptr);
+		vkDestroySemaphore(VulkanManager::GetVulkanManager().GetDevice(), VulkanManager::GetVulkanManager().GetImageAvailableSemaphores()[i], nullptr);
+		vkDestroySemaphore(VulkanManager::GetVulkanManager().GetDevice(), VulkanManager::GetVulkanManager().GetRenderFinishedSemaphores()[i], nullptr);
+		vkDestroyFence(VulkanManager::GetVulkanManager().GetDevice(), VulkanManager::GetVulkanManager().GetInFlightFences()[i], nullptr);
 	}
 	
-	vkDestroyCommandPool(m_vkManager.GetDevice(), m_commandPool, nullptr);
+	vkDestroyCommandPool(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool, nullptr);
 	
 	// Device queues (graphics queue) are implicitly destroyed when the device is destroyed.
-	vkDestroyDevice(m_vkManager.GetDevice(), nullptr);
+	vkDestroyDevice(VulkanManager::GetVulkanManager().GetDevice(), nullptr);
 	
 	if (g_enableValidationLayers)
 	{
-		DebugLayer::DestroyDebugUtilsMessengerEXT(m_vkManager.GetInstance(), m_vkManager.GetDebugMessenger(), nullptr);
+		DebugLayer::DestroyDebugUtilsMessengerEXT(VulkanManager::GetVulkanManager().GetInstance(), VulkanManager::GetVulkanManager().GetDebugMessenger(), nullptr);
 	}
 
-	vkDestroySurfaceKHR(m_vkManager.GetInstance(), m_vkManager.GetSurface(), nullptr);
+	vkDestroySurfaceKHR(VulkanManager::GetVulkanManager().GetInstance(), VulkanManager::GetVulkanManager().GetSurface(), nullptr);
 	
 	// Don't destroy physical device since it is destroyed implicitly when the instance is destroyed.
-	vkDestroyInstance(m_vkManager.GetInstance(), nullptr);
+	vkDestroyInstance(VulkanManager::GetVulkanManager().GetInstance(), nullptr);
 
 	glfwDestroyWindow(m_window);
 	glfwTerminate();

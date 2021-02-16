@@ -32,8 +32,6 @@ public:
 	// This needs to be static because GLFW doesn't know how to call it from a this pointer.
 	static void FrameBufferResizeCallback(GLFWwindow* window, int width, int height);
 
-	// Should be a global?
-	VulkanManager m_vkManager;
 	ImGuiManager m_imguiManager;
 
 private:

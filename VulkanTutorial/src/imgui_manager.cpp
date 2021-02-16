@@ -20,7 +20,7 @@ void ImGuiManager::SubmitDrawCall(uint32_t imageIndex)
 	ImGui::Render();
 	
 	// Submit ImGui commands
-	VK_ASSERT(vkResetCommandPool(m_vkManager.GetDevice(), m_commandPool, 0), "");
+	VK_ASSERT(vkResetCommandPool(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool, 0), "");
 
 	VkCommandBufferBeginInfo info = {};
 	{
@@ -36,8 +36,8 @@ void ImGuiManager::SubmitDrawCall(uint32_t imageIndex)
 	renderpassinfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	renderpassinfo.renderPass = m_renderPass;
 	renderpassinfo.framebuffer = m_frameBuffers[imageIndex];
-	renderpassinfo.renderArea.extent.width = m_vkManager.GetSwapChainExtent().width;
-	renderpassinfo.renderArea.extent.height = m_vkManager.GetSwapChainExtent().height;
+	renderpassinfo.renderArea.extent.width = VulkanManager::GetVulkanManager().GetSwapChainExtent().width;
+	renderpassinfo.renderArea.extent.height = VulkanManager::GetVulkanManager().GetSwapChainExtent().height;
 	renderpassinfo.clearValueCount = 1;
 	renderpassinfo.pClearValues = &clearValue;
 	vkCmdBeginRenderPass(m_commandBuffers[imageIndex], &renderpassinfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -51,19 +51,19 @@ void ImGuiManager::SubmitDrawCall(uint32_t imageIndex)
 void ImGuiManager::Cleanup()
 {
 	for (auto& framebuffer : m_frameBuffers) {
-		vkDestroyFramebuffer(m_vkManager.GetDevice(), framebuffer, nullptr);
+		vkDestroyFramebuffer(VulkanManager::GetVulkanManager().GetDevice(), framebuffer, nullptr);
 	}
 
-	vkFreeCommandBuffers(m_vkManager.GetDevice(), m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
+	vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
 
-	vkDestroyRenderPass(m_vkManager.GetDevice(), m_renderPass, nullptr);
-	vkDestroyCommandPool(m_vkManager.GetDevice(), m_commandPool, nullptr);
+	vkDestroyRenderPass(VulkanManager::GetVulkanManager().GetDevice(), m_renderPass, nullptr);
+	vkDestroyCommandPool(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool, nullptr);
 	
 	// Resources to destroy when the program ends
 	ImGui_ImplVulkan_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
-	vkDestroyDescriptorPool(m_vkManager.GetDevice(), m_descriptorPool, nullptr);
+	vkDestroyDescriptorPool(VulkanManager::GetVulkanManager().GetDevice(), m_descriptorPool, nullptr);
 }
 
 void ImGuiManager::CreateRenderPass()
@@ -71,7 +71,7 @@ void ImGuiManager::CreateRenderPass()
 	VkAttachmentDescription imguiAttachment{};
 	CreateAttachmentDescription(
 		imguiAttachment,
-		m_vkManager.GetSwapChainImageFormat(),
+		VulkanManager::GetVulkanManager().GetSwapChainImageFormat(),
 		0,
 		VK_SAMPLE_COUNT_1_BIT,
 		VK_ATTACHMENT_LOAD_OP_LOAD,
@@ -122,7 +122,7 @@ void ImGuiManager::CreateRenderPass()
 		renderPassInfo.pDependencies = &dependency;
 	}
 
-	VK_ASSERT(vkCreateRenderPass(m_vkManager.GetDevice(), &renderPassInfo, nullptr, &m_renderPass), "Failed to create render pass");
+	VK_ASSERT(vkCreateRenderPass(VulkanManager::GetVulkanManager().GetDevice(), &renderPassInfo, nullptr, &m_renderPass), "Failed to create render pass");
 }
 
 void ImGuiManager::CreateDescriptorSetLayout()
@@ -146,12 +146,12 @@ void ImGuiManager::CreateDescriptorPool()
 		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
 	};
 
-	VKCreateDescriptorPool(m_vkManager.GetDevice(), &m_descriptorPool, poolSizes, 11, static_cast<uint32_t>(m_vkManager.NumSwapChainImages()));
+	VKCreateDescriptorPool(VulkanManager::GetVulkanManager().GetDevice(), &m_descriptorPool, poolSizes, 11, static_cast<uint32_t>(VulkanManager::GetVulkanManager().NumSwapChainImages()));
 }
 
 void ImGuiManager::CreateCommandPool()
 {
-	auto index = m_vkManager.FindQueueFamilies(m_vkManager.GetPhysicalDevice());
+	auto index = VulkanManager::GetVulkanManager().FindQueueFamilies(VulkanManager::GetVulkanManager().GetPhysicalDevice());
 
 	// todo: move to new function
 	VkCommandPoolCreateInfo commandPoolCreateInfo = {};
@@ -159,10 +159,10 @@ void ImGuiManager::CreateCommandPool()
 	commandPoolCreateInfo.queueFamilyIndex = index.graphicsFamily.value();
 	commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-	if (vkCreateCommandPool(m_vkManager.GetDevice(), &commandPoolCreateInfo, nullptr, &m_commandPool) != VK_SUCCESS) {
+	if (vkCreateCommandPool(VulkanManager::GetVulkanManager().GetDevice(), &commandPoolCreateInfo, nullptr, &m_commandPool) != VK_SUCCESS) {
 		throw std::runtime_error("Could not create graphics command pool");
 	}
 
-	m_commandBuffers.resize(m_vkManager.GetSwapChainImageViews().size());
-	VKCreateCommandBuffers(m_vkManager.GetDevice(), m_commandBuffers.data(), static_cast<uint32_t>(m_commandBuffers.size()), m_commandPool);
+	m_commandBuffers.resize(VulkanManager::GetVulkanManager().GetSwapChainImageViews().size());
+	VKCreateCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_commandBuffers.data(), static_cast<uint32_t>(m_commandBuffers.size()), m_commandPool);
 }

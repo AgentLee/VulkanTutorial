@@ -9,7 +9,6 @@ class VulkanBase
 {
 public:
 	VulkanBase() = default;
-	VulkanBase(VulkanManager& vulkanManager) : m_vkManager(vulkanManager) {}
 	~VulkanBase() = default;
 	
 	virtual void Initialize() = 0;

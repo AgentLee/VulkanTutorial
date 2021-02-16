@@ -28,11 +28,23 @@ struct SwapChainSupportDetails
 
 class VulkanManager
 {
+	// C++17 requires this to be an inline for singleton to work.
+	static inline VulkanManager* s_manager;
+	
 public:
 	VulkanManager() = default;
 	VulkanManager(GLFWwindow* window) : m_window(window) {}
 	~VulkanManager() = default;
 
+	static void CreateVulkanManager(GLFWwindow* window)
+	{
+		s_manager = new VulkanManager(window);
+	}
+	static VulkanManager& GetVulkanManager()
+	{
+		return *VulkanManager::s_manager;
+	}
+	
 	void Initialize();
 	void CreateInstance();
 	void SetupDebugMessenger();
