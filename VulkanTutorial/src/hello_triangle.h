@@ -13,6 +13,8 @@
 #include "vulkan_base.h"
 #include "imgui_manager.h"
 
+#include "sample_model.h"
+
 #include <iostream>
 #include <stdexcept>
 #include <cstdlib>
@@ -33,6 +35,7 @@ public:
 	static void FrameBufferResizeCallback(GLFWwindow* window, int width, int height);
 
 	ImGuiManager m_imguiManager;
+	SampleModel m_sampleModel;
 
 private:
 	void InitWindow();
@@ -45,7 +48,7 @@ private:
 	
 	void InitVulkan();
 	
-	VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
+	//VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 	
 	void RecreateSwapChain();
 	void CleanupSwapChain();
@@ -55,7 +58,6 @@ private:
 	VkShaderModule CreateShaderModule(const std::vector<char>& code);
 
 	void CreateRenderPasses();
-	void CreateRenderPass();
 
 	void CreateFrameBuffers();
 
@@ -86,7 +88,7 @@ private:
 	void GenerateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels);
 
 	void CreateDepthResources();
-	VkFormat FindDepthFormat();
+	//VkFormat FindDepthFormat();
 	bool HasStencilComponent(VkFormat format);
 
 	void CreateColorResources();
@@ -94,7 +96,6 @@ private:
 private:
 	std::vector<VkFramebuffer> m_swapChainFrameBuffers;
 	
-	VkRenderPass m_renderPass;
 	VkDescriptorSetLayout m_descriptorSetLayout;
 	VkPipelineLayout m_pipelineLayout;
 	VkPipeline m_graphicsPipeline;
@@ -102,9 +103,7 @@ private:
 	// Manage the memory being used to store/allocate buffers.
 	// Write all the ops you want into the command buffer then
 	// tell Vulkan which commands to execute.
-	VkCommandPool m_commandPool;
 	std::vector<VkCommandBuffer> m_commandBuffers;
-	VkDescriptorPool m_descriptorPool;
 	std::vector<VkDescriptorSet> m_descriptorSets;
 	
 	// Buffers should be allocated in one go.
@@ -112,11 +111,6 @@ private:
 	VkDeviceMemory m_vertexBufferMemory;
 	VkBuffer m_indexBuffer;
 	VkDeviceMemory m_indexBufferMemory;
-
-	// Copying new data each frame so no staging buffer.
-	// Multiple buffers make sense since multiple frames can be in flight at the same time.
-	std::vector<VkBuffer> m_uniformBuffers;
-	std::vector<VkDeviceMemory> m_uniformBuffersMemory;
 
 	// Textures
 	uint32_t m_mipLevels;
@@ -130,7 +124,6 @@ private:
 	VkDeviceMemory m_depthImageMemory;
 	VkImageView m_depthImageView;
 
-	//VkSampleCountFlagBits m_msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 	VkImage m_colorImage;
 	VkDeviceMemory m_colorImageMemory;
 	VkImageView m_colorImageView;

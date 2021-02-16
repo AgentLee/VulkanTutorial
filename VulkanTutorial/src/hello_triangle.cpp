@@ -100,7 +100,7 @@ void HelloTriangle::DrawFrame()
 	VkSemaphore signalSemaphores[] = { VulkanManager::GetVulkanManager().GetRenderFinishedSemaphores()[m_currentFrame] };
 
 	// Update uniforms
-	UpdateUniformBuffers(imageIndex);
+	m_sampleModel.SubmitDrawCall(imageIndex);
 
 #if IMGUI_ENABLED
 	// Submit ImGui commands
@@ -153,7 +153,7 @@ void HelloTriangle::DrawFrame()
 	}
 	
 	// Present
-	// Submit result back to swap chain to show on screen.
+	// Submit result back to swap chain toc show on screen.
 
 	VkSwapchainKHR swapChains[] = { VulkanManager::GetVulkanManager().GetSwapChain() };
 	VkPresentInfoKHR presentInfo{};
@@ -301,27 +301,6 @@ void HelloTriangle::InitVulkan()
 	CreateCommandBuffers();
 }
 
-VkFormat HelloTriangle::FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling,
-	VkFormatFeatureFlags features)
-{
-	for (VkFormat format : candidates)
-	{
-		VkFormatProperties properties;
-		vkGetPhysicalDeviceFormatProperties(VulkanManager::GetVulkanManager().GetPhysicalDevice(), format, &properties);
-
-		if (tiling == VK_IMAGE_TILING_LINEAR && (properties.linearTilingFeatures & features) == features)
-		{
-			return format;
-		}
-		else if (tiling == VK_IMAGE_TILING_OPTIMAL && (properties.optimalTilingFeatures & features) == features)
-		{
-			return format;
-		}
-	}
-
-	throw std::runtime_error("Failed to find supported format!");
-}
-
 void HelloTriangle::RecreateSwapChain()
 {
 	// Pause while the window is minimized.
@@ -354,46 +333,9 @@ void HelloTriangle::RecreateSwapChain()
 	CreateCommandBuffers();
 }
 
-//void HelloTriangle::CreateImageViews()
-//{
-//	VulkanManager::GetVulkanManager().CreateImageViews();
-//}
-
 void HelloTriangle::CreateDescriptorSetLayout()
 {
-	// Descriptors allow shaders to access buffers and images.
-	// Descriptor Layouts specify the type of resources being used by the shader.
-	// Descriptor Sets specify the buffer or image that get bound to the descriptor (frame buffers specify image views to render pass attachments)
-
-	VkDescriptorSetLayoutBinding uboLayoutBinding{};
-	{
-		uboLayoutBinding.binding = 0;											// Binding located in the shader
-		uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;	// Type of descriptor
-		uboLayoutBinding.descriptorCount = 1;									// How many descriptors
-		uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;				// Which stage to use the descriptor
-		uboLayoutBinding.pImmutableSamplers = nullptr;							// Image sampling descriptor
-	}
-
-	// We need to create a combined image sampler. This way teh shader can access the image through the sampler.
-	VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-	{
-		samplerLayoutBinding.binding = 1;
-		samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		samplerLayoutBinding.descriptorCount = 1;
-		samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;	// When do you want to use the image			
-		samplerLayoutBinding.pImmutableSamplers = nullptr;
-	}
-
-	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
-
-	VkDescriptorSetLayoutCreateInfo layoutInfo{};
-	{
-		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());;
-		layoutInfo.pBindings = bindings.data();
-	}
-
-	VK_ASSERT(vkCreateDescriptorSetLayout(VulkanManager::GetVulkanManager().GetDevice(), &layoutInfo, nullptr, &m_descriptorSetLayout), "Failed to create descriptor set layout");
+	m_sampleModel.CreateDescriptorSetLayout();
 }
 
 void HelloTriangle::CreateGraphicsPipeline()
@@ -586,7 +528,7 @@ void HelloTriangle::CreateGraphicsPipeline()
 	{
 		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 		pipelineLayoutInfo.setLayoutCount = 1;
-		pipelineLayoutInfo.pSetLayouts = &m_descriptorSetLayout;
+		pipelineLayoutInfo.pSetLayouts = &m_sampleModel.GetDescriptorSetLayout();
 		pipelineLayoutInfo.pushConstantRangeCount = 0;
 		pipelineLayoutInfo.pPushConstantRanges = nullptr;
 	}
@@ -614,11 +556,11 @@ void HelloTriangle::CreateGraphicsPipeline()
 
 		// Reference render pass and the subpass of this graphics pipeline.
 		{
-			pipelineInfo.renderPass = m_renderPass;
+			pipelineInfo.renderPass = m_sampleModel.GetRenderPass();
 			pipelineInfo.subpass = 0;
 		}
 
-		// Any render pass can be used with this pipeline as long as they are compatible with m_renderPass.
+		// Any render pass can be used with this pipeline as long as they are compatible with m_sampleModel.GetRenderPass().
 		// You can create a new pass by deriving from this pipeline.
 		{
 			pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
@@ -656,121 +598,11 @@ VkShaderModule HelloTriangle::CreateShaderModule(const std::vector<char>& code)
 
 void HelloTriangle::CreateRenderPasses()
 {
-	CreateRenderPass();
-	
+	m_sampleModel.CreateRenderPass();
+
 #if IMGUI_ENABLED
 	m_imguiManager.CreateRenderPass();
 #endif
-}
-
-void HelloTriangle::CreateRenderPass()
-{
-	// Tell Vulkan about the frame buffer attachments used for rendering.
-	// This includes how many color/depth buffers, how many samples for each, and blending.
-	// We encapsulate that in a render pass object.
-
-	VkAttachmentDescription colorAttachment{};
-	CreateAttachmentDescription(
-		colorAttachment,
-		VulkanManager::GetVulkanManager().GetSwapChainImageFormat(),
-		0,
-		VulkanManager::GetVulkanManager().GetMSAASamples(), 
-		VK_ATTACHMENT_LOAD_OP_CLEAR,				// Clear buffer for next frame.
-		VK_ATTACHMENT_STORE_OP_STORE,				// Save for later since we want to see the triangle.
-		VK_ATTACHMENT_LOAD_OP_DONT_CARE,			// Clear buffer for next frame.
-		VK_ATTACHMENT_STORE_OP_DONT_CARE,			// Save for later since we want to see the triangle.
-		VK_IMAGE_LAYOUT_UNDEFINED,					// We don't care about the previous image since we clear it anyway.
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL	// The image should be ready to present in the swap chain.
-	);
-
-	VkAttachmentDescription depthAttachment{};
-	CreateAttachmentDescription(
-		depthAttachment,
-		FindDepthFormat(),
-		0,
-		VulkanManager::GetVulkanManager().GetMSAASamples(),
-		VK_ATTACHMENT_LOAD_OP_CLEAR,
-		VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-		VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-	);
-
-	// Multisampled images cannot be presented directly, needs to be resolved to a regular image.
-	// In order to present it we need to add a new attachment.
-	VkAttachmentDescription colorAttachmentResolve{};
-	CreateAttachmentDescription(
-		colorAttachmentResolve,
-		VulkanManager::GetVulkanManager().GetSwapChainImageFormat(),
-		0,
-		VK_SAMPLE_COUNT_1_BIT,
-		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-		VK_ATTACHMENT_STORE_OP_STORE,
-		VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-		VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-	);
-
-	// Subpasses - passes that rely on the previous pass.
-	VkAttachmentReference colorAttachmentRef{};
-	CreateAttachmentReference(colorAttachmentRef, 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-	VkAttachmentReference depthAttachmentRef{};
-	CreateAttachmentReference(depthAttachmentRef, 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-
-	VkAttachmentReference colorAttachmentResolveRef{};
-	CreateAttachmentReference(colorAttachmentResolveRef, 2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-	std::array<VkAttachmentReference, 1> colorAttachments = {
-		colorAttachmentRef,
-	};
-
-	VkSubpassDescription subpass{};
-	{
-		subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-		subpass.colorAttachmentCount = static_cast<uint32_t>(colorAttachments.size());
-		subpass.pColorAttachments = colorAttachments.data();
-		subpass.pDepthStencilAttachment = &depthAttachmentRef;
-		subpass.pResolveAttachments = &colorAttachmentResolveRef;
-
-		// Not too sure about this...
-		// The index of the attachment in this array is directly referenced from the fragment shader with
-		// the layout(location = 0) out vec4 outColor directive!
-	}
-
-	VkSubpassDependency dependency{};
-	CreateSubpassDependency(
-		dependency, 
-		0, 
-		VK_SUBPASS_EXTERNAL, 
-		0, 
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT, 
-		0, 
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
-	);
-
-	std::array<VkAttachmentDescription, 3> attachments = {
-		colorAttachment,
-		depthAttachment,
-		colorAttachmentResolve,
-	};
-
-	// Create the render pass
-	VkRenderPassCreateInfo renderPassInfo{};
-	{
-		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-		renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-		renderPassInfo.pAttachments = attachments.data();
-		renderPassInfo.subpassCount = 1;
-		renderPassInfo.pSubpasses = &subpass;
-		renderPassInfo.dependencyCount = 1;
-		renderPassInfo.pDependencies = &dependency;
-	}
-
-	VK_ASSERT(vkCreateRenderPass(VulkanManager::GetVulkanManager().GetDevice(), &renderPassInfo, nullptr, &m_renderPass), "Failed to create render pass");
 }
 
 void HelloTriangle::CreateFrameBuffers()
@@ -795,7 +627,7 @@ void HelloTriangle::CreateFrameBuffers()
 		VkFramebufferCreateInfo frameBufferInfo{};
 		{
 			frameBufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-			frameBufferInfo.renderPass = m_renderPass;
+			frameBufferInfo.renderPass = m_sampleModel.GetRenderPass();
 			frameBufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
 			frameBufferInfo.pAttachments = attachments.data();
 			frameBufferInfo.width = VulkanManager::GetVulkanManager().GetSwapChainExtent().width;
@@ -807,37 +639,14 @@ void HelloTriangle::CreateFrameBuffers()
 	}
 
 #if IMGUI_ENABLED
-	{
-		VkImageView attachment[1];
-		VkFramebufferCreateInfo info = {};
-		info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		info.renderPass = m_imguiManager.GetRenderPass();
-		info.attachmentCount = 1;
-		info.pAttachments = attachment;
-		info.width = VulkanManager::GetVulkanManager().GetSwapChainExtent().width;
-		info.height = VulkanManager::GetVulkanManager().GetSwapChainExtent().height;
-		info.layers = 1;
-		for (uint32_t i = 0; i < m_imguiManager.GetFrameBuffers().size(); ++i)
-		{
-			attachment[0] = VulkanManager::GetVulkanManager().GetSwapChainImageViews()[i];
-			vkCreateFramebuffer(VulkanManager::GetVulkanManager().GetDevice(), &info, nullptr, &m_imguiManager.GetFrameBuffers()[i]);
-		}
-	}
+
+	m_imguiManager.CreateFrameBuffers();
 #endif
 }
 
 void HelloTriangle::CreateCommandPool()
 {
-	auto queueFamilyIndices = VulkanManager::GetVulkanManager().FindQueueFamilies(VulkanManager::GetVulkanManager().GetPhysicalDevice());
-
-	VkCommandPoolCreateInfo poolInfo{};
-	{
-		poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();	// We want to draw, use the graphics family
-		poolInfo.flags = 0;
-	}
-
-	VK_ASSERT(vkCreateCommandPool(VulkanManager::GetVulkanManager().GetDevice(), &poolInfo, nullptr, &m_commandPool), "Failed to create command pool");
+	m_sampleModel.CreateCommandPool();
 }
 
 void HelloTriangle::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& memory)
@@ -1022,29 +831,15 @@ void HelloTriangle::CreateIndexBuffer()
 
 void HelloTriangle::UpdateUniformBuffers(uint32_t currentImage)
 {
-	float time = GetCurrentTime();
-	time = 1.0f;
-
-	UniformBufferObject ubo{};
-	{
-		ubo.model = glm::rotate(glm::mat4(1), time * glm::radians(0.0f), glm::vec3(0, 0, 1));
-		ubo.view = glm::lookAt(glm::vec3(2, 2, 2), glm::vec3(0), glm::vec3(0, 0, 1));
-		ubo.proj = glm::perspective(glm::radians(45.0f), (float)VulkanManager::GetVulkanManager().GetSwapChainExtent().width / (float)VulkanManager::GetVulkanManager().GetSwapChainExtent().height, 0.1f, 10.0f);
-		ubo.proj[1][1] *= -1.0f;
-	}
-
-	void* data;
-	VK_ASSERT(vkMapMemory(VulkanManager::GetVulkanManager().GetDevice(), m_uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data), "Couldn't map uniform buffer");
-	memcpy(data, &ubo, sizeof(ubo));
-	vkUnmapMemory(VulkanManager::GetVulkanManager().GetDevice(), m_uniformBuffersMemory[currentImage]);
+	m_sampleModel.UpdateUniformBuffers(currentImage);
 }
 
 void HelloTriangle::CreateUniformBuffers()
 {
 	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 	{
-		m_uniformBuffers.resize(VulkanManager::GetVulkanManager().GetSwapChainImages().size());
-		m_uniformBuffersMemory.resize(VulkanManager::GetVulkanManager().GetSwapChainImages().size());
+		m_sampleModel.m_uniformBuffers.resize(VulkanManager::GetVulkanManager().GetSwapChainImages().size());
+		m_sampleModel.m_uniformBuffersMemory.resize(VulkanManager::GetVulkanManager().GetSwapChainImages().size());
 	}
 
 	for (size_t i = 0; i < VulkanManager::GetVulkanManager().GetSwapChainImages().size(); ++i)
@@ -1052,8 +847,8 @@ void HelloTriangle::CreateUniformBuffers()
 		CreateBuffer(bufferSize, 
 			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
-			m_uniformBuffers[i], 
-			m_uniformBuffersMemory[i]);
+			m_sampleModel.m_uniformBuffers[i],
+			m_sampleModel.m_uniformBuffersMemory[i]);
 	}
 }
 
@@ -1070,26 +865,17 @@ void HelloTriangle::CreateMainDescriptorPool()
 {
 	// Descriptor sets must be allocated from a command pool.
 	
-	std::array<VkDescriptorPoolSize, 2> poolSizes{};
-	{
-		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		poolSizes[0].descriptorCount = static_cast<uint32_t>(VulkanManager::GetVulkanManager().GetSwapChainImages().size());
-		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		poolSizes[1].descriptorCount = static_cast<uint32_t>(VulkanManager::GetVulkanManager().GetSwapChainImages().size());
-	}
-
-	// Allocate one descriptor every frame.
-	VKCreateDescriptorPool(VulkanManager::GetVulkanManager().GetDevice(), &m_descriptorPool, poolSizes.data(), static_cast<uint32_t>(poolSizes.size()), static_cast<uint32_t>(VulkanManager::GetVulkanManager().NumSwapChainImages()));
+	m_sampleModel.CreateDescriptorPool();
 }
 
 void HelloTriangle::CreateDescriptorSets()
 {
-	std::vector<VkDescriptorSetLayout> layouts(VulkanManager::GetVulkanManager().GetSwapChainImages().size(), m_descriptorSetLayout);
+	std::vector<VkDescriptorSetLayout> layouts(VulkanManager::GetVulkanManager().GetSwapChainImages().size(), m_sampleModel.GetDescriptorSetLayout());
 
 	VkDescriptorSetAllocateInfo allocInfo{};
 	{
 		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		allocInfo.descriptorPool = m_descriptorPool;
+		allocInfo.descriptorPool = m_sampleModel.GetDescriptorPool();
 		allocInfo.descriptorSetCount = static_cast<uint32_t>(VulkanManager::GetVulkanManager().GetSwapChainImages().size());
 		allocInfo.pSetLayouts = layouts.data();
 	}
@@ -1106,7 +892,7 @@ void HelloTriangle::CreateDescriptorSets()
 		// Specify which buffer we want the descriptor to refer to.
 		VkDescriptorBufferInfo bufferInfo{};
 		{
-			bufferInfo.buffer = m_uniformBuffers[i];
+			bufferInfo.buffer = m_sampleModel.m_uniformBuffers[i];
 			bufferInfo.offset = 0;
 			bufferInfo.range = sizeof(UniformBufferObject);
 		}
@@ -1185,7 +971,7 @@ void HelloTriangle::CreateCommandBuffers()
 	VkCommandBufferAllocateInfo allocInfo{};
 	{
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		allocInfo.commandPool = m_commandPool;
+		allocInfo.commandPool = m_sampleModel.GetCommandPool();
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;	// Submit to queue for execution but cannot be called from other command buffers (secondary).
 		allocInfo.commandBufferCount = (uint32_t)m_commandBuffers.size();
 
@@ -1209,7 +995,7 @@ void HelloTriangle::CreateCommandBuffers()
 		VkRenderPassBeginInfo renderPassInfo{};
 		{
 			renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-			renderPassInfo.renderPass = m_renderPass;
+			renderPassInfo.renderPass = m_sampleModel.GetRenderPass();
 			renderPassInfo.framebuffer = m_swapChainFrameBuffers[i];
 			renderPassInfo.renderArea.offset = {0, 0};
 			renderPassInfo.renderArea.extent = VulkanManager::GetVulkanManager().GetSwapChainExtent();
@@ -1260,7 +1046,7 @@ VkCommandBuffer HelloTriangle::BeginSingleTimeCommands()
 	{
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocInfo.commandPool = m_commandPool;
+		allocInfo.commandPool = m_sampleModel.GetCommandPool();
 		allocInfo.commandBufferCount = 1;
 	}
 
@@ -1295,7 +1081,7 @@ void HelloTriangle::EndSingleTimeCommands(VkCommandBuffer commandBuffer)
 	// Wait for the transfer to finish.
 	VK_ASSERT(vkQueueWaitIdle(VulkanManager::GetVulkanManager().GetGraphicsQueue()), "Failed to wait");
 
-	vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool, 1, &commandBuffer);
+	vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_sampleModel.GetCommandPool(), 1, &commandBuffer);
 }
 
 void HelloTriangle::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples,
@@ -1716,13 +1502,13 @@ void HelloTriangle::CreateDepthResources()
 	TransitionImageLayout(m_depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
 }
 
-VkFormat HelloTriangle::FindDepthFormat()
-{
-	return FindSupportedFormat(
-		{ VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT },
-		VK_IMAGE_TILING_OPTIMAL,
-		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
-}
+//VkFormat HelloTriangle::FindDepthFormat()
+//{
+//	return FindSupportedFormat(
+//		{ VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT },
+//		VK_IMAGE_TILING_OPTIMAL,
+//		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+//}
 
 bool HelloTriangle::HasStencilComponent(VkFormat format)
 {
@@ -1766,11 +1552,11 @@ void HelloTriangle::CleanupSwapChain()
 		vkDestroyFramebuffer(VulkanManager::GetVulkanManager().GetDevice(), framebuffer, nullptr);
 	}
 
-	vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
+	vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_sampleModel.GetCommandPool(), static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
 
 	vkDestroyPipeline(VulkanManager::GetVulkanManager().GetDevice(), m_graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(VulkanManager::GetVulkanManager().GetDevice(), m_pipelineLayout, nullptr);
-	vkDestroyRenderPass(VulkanManager::GetVulkanManager().GetDevice(), m_renderPass, nullptr);
+	vkDestroyRenderPass(VulkanManager::GetVulkanManager().GetDevice(), m_sampleModel.GetRenderPass(), nullptr);
 
 	for (auto& imageView : VulkanManager::GetVulkanManager().GetSwapChainImageViews())
 	{
@@ -1781,11 +1567,11 @@ void HelloTriangle::CleanupSwapChain()
 
 	for (size_t i = 0; i < VulkanManager::GetVulkanManager().GetSwapChainImages().size(); ++i)
 	{
-		vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), m_uniformBuffers[i], nullptr);
-		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_uniformBuffersMemory[i], nullptr);
+		vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), m_sampleModel.m_uniformBuffers[i], nullptr);
+		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_sampleModel.m_uniformBuffersMemory[i], nullptr);
 	}
 
-	vkDestroyDescriptorPool(VulkanManager::GetVulkanManager().GetDevice(), m_descriptorPool, nullptr);
+	vkDestroyDescriptorPool(VulkanManager::GetVulkanManager().GetDevice(), m_sampleModel.GetDescriptorPool(), nullptr);
 }
 
 void HelloTriangle::Cleanup()
@@ -1797,7 +1583,7 @@ void HelloTriangle::Cleanup()
 	vkDestroyImage(VulkanManager::GetVulkanManager().GetDevice(), m_textureImage, nullptr);
 	vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_textureImageMemory, nullptr);
 
-	vkDestroyDescriptorSetLayout(VulkanManager::GetVulkanManager().GetDevice(), m_descriptorSetLayout, nullptr);
+	vkDestroyDescriptorSetLayout(VulkanManager::GetVulkanManager().GetDevice(), m_sampleModel.GetDescriptorSetLayout(), nullptr);
 	
 	vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), m_vertexBuffer, nullptr);
 	vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_vertexBufferMemory, nullptr);
@@ -1812,7 +1598,7 @@ void HelloTriangle::Cleanup()
 		vkDestroyFence(VulkanManager::GetVulkanManager().GetDevice(), VulkanManager::GetVulkanManager().GetInFlightFences()[i], nullptr);
 	}
 	
-	vkDestroyCommandPool(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool, nullptr);
+	vkDestroyCommandPool(VulkanManager::GetVulkanManager().GetDevice(), m_sampleModel.GetCommandPool(), nullptr);
 	
 	// Device queues (graphics queue) are implicitly destroyed when the device is destroyed.
 	vkDestroyDevice(VulkanManager::GetVulkanManager().GetDevice(), nullptr);

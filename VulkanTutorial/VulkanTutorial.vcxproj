@@ -173,6 +173,7 @@
     <ClCompile Include="src\hello_triangle.cpp" />
     <ClCompile Include="src\imgui_manager.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\sample_model.cpp" />
     <ClCompile Include="src\vulkan_manager.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -189,6 +190,7 @@
     <ClInclude Include="src\hello_triangle.h" />
     <ClInclude Include="src\helpers.h" />
     <ClInclude Include="src\imgui_manager.h" />
+    <ClInclude Include="src\sample_model.h" />
     <ClInclude Include="src\vertex.h" />
     <ClInclude Include="src\vulkan_base.h" />
     <ClInclude Include="src\vulkan_helper.h" />

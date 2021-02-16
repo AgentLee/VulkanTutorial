@@ -166,3 +166,23 @@ void ImGuiManager::CreateCommandPool()
 	m_commandBuffers.resize(VulkanManager::GetVulkanManager().GetSwapChainImageViews().size());
 	VKCreateCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_commandBuffers.data(), static_cast<uint32_t>(m_commandBuffers.size()), m_commandPool);
 }
+
+void ImGuiManager::CreateFrameBuffers()
+{
+	m_frameBuffers.resize(VulkanManager::GetVulkanManager().GetSwapChainImageViews().size());
+	
+	VkImageView attachment[1];
+	VkFramebufferCreateInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	info.renderPass = m_renderPass;
+	info.attachmentCount = 1;
+	info.pAttachments = attachment;
+	info.width = VulkanManager::GetVulkanManager().GetSwapChainExtent().width;
+	info.height = VulkanManager::GetVulkanManager().GetSwapChainExtent().height;
+	info.layers = 1;
+	for (uint32_t i = 0; i < m_frameBuffers.size(); ++i)
+	{
+		attachment[0] = VulkanManager::GetVulkanManager().GetSwapChainImageViews()[i];
+		vkCreateFramebuffer(VulkanManager::GetVulkanManager().GetDevice(), &info, nullptr, &m_frameBuffers[i]);
+	}
+}
