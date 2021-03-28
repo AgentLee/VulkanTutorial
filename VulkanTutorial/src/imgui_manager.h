@@ -16,9 +16,11 @@ public:
 	void Cleanup() override;
 
 	void CreateRenderPass() override;
-	void CreateGraphicsPipeline() override {};
+	void CreateGraphicsPipeline() override {}
 	void CreateDescriptorSetLayout() override;
+	void CreateDescriptorSet() override {}
 	void CreateDescriptorPool() override;
 	void CreateCommandPool() override;
 	void CreateFrameBuffers() override;
+	void CreateCommandBuffers() override {}
 };

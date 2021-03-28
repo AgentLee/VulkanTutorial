@@ -17,11 +17,14 @@ public:
 
 	virtual void CreateRenderPass() = 0;
 	virtual void CreateGraphicsPipeline() = 0;
+	virtual void CreateDescriptorSet() = 0;
 	virtual void CreateDescriptorSetLayout() = 0;
 	virtual void CreateDescriptorPool() = 0;
 	virtual void CreateCommandPool() = 0;
+	virtual void CreateCommandBuffers() = 0;
 	virtual void CreateFrameBuffers() = 0;
 
+	// Getters
 	VkDescriptorPool& GetDescriptorPool() { return m_descriptorPool; }
 	VkDescriptorSetLayout& GetDescriptorSetLayout() { return m_descriptorSetLayout; }
 	std::vector<VkDescriptorSet>& GetDescriptorSets() { return  m_descriptorSets; }
@@ -30,15 +33,17 @@ public:
 	std::vector<VkCommandBuffer>& GetCommandBuffers() { return m_commandBuffers; }
 	std::vector<VkFramebuffer>& GetFrameBuffers() { return m_frameBuffers; }
 
-	// This should be global singleton?
-	VulkanManager m_vkManager;
-
 	// Manage the memory being used to store/allocate buffers.
 	// Write all the ops you want into the command buffer then
 	// tell Vulkan which commands to execute.
 	VkDescriptorPool m_descriptorPool;
 	VkDescriptorSetLayout m_descriptorSetLayout;
 	std::vector<VkDescriptorSet> m_descriptorSets;
+
+	VkPipelineLayout m_pipelineLayout;
+	VkPipeline m_graphicsPipeline;
+	
+	// This should be outside in Renderer
 	VkRenderPass m_renderPass;
 	VkCommandPool m_commandPool;
 	std::vector<VkCommandBuffer> m_commandBuffers;

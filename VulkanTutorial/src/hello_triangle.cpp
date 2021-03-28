@@ -6,8 +6,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
+//#define STB_IMAGE_IMPLEMENTATION
+//#include <stb_image.h>
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
@@ -18,6 +18,8 @@
 #include <algorithm>
 #include <unordered_map>
 
+
+//#include "texture.h"
 #include "../libs/imgui/imgui_impl_glfw.h"
 #include "../libs/imgui/imgui_impl_vulkan.h"
 
@@ -289,9 +291,9 @@ void HelloTriangle::InitVulkan()
 	CreateColorResources();
 	CreateDepthResources();
 	CreateFrameBuffers();	// Since we have depth buffer, we need to make sure that's created first.
-	CreateTextureImage();
-	CreateTextureImageView();
-	CreateTextureSampler();
+
+	m_sampleModel.Initialize();
+
 	LoadModel();
 	CreateVertexBuffer();
 	CreateIndexBuffer();
@@ -340,260 +342,7 @@ void HelloTriangle::CreateDescriptorSetLayout()
 
 void HelloTriangle::CreateGraphicsPipeline()
 {
-	// Load shader code
-	auto vsCode = ReadFile(SHADER_DIRECTORY + "vert.spv");
-	auto fsCode = ReadFile(SHADER_DIRECTORY + "frag.spv");
-
-	// Create modules
-	auto vsModule = CreateShaderModule(vsCode);
-	auto fsModule = CreateShaderModule(fsCode);
-
-	// Create shader stages
-	VkPipelineShaderStageCreateInfo vsStageInfo{};
-	{
-		vsStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		vsStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-		vsStageInfo.module = vsModule;
-		vsStageInfo.pName = "main";	// Specify entry point function
-		//vsStageInfo.pSpecializationInfo	// Specify values for shader constants
-	}
-
-	VkPipelineShaderStageCreateInfo fsStageInfo{};
-	{
-		fsStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		fsStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-		fsStageInfo.module = fsModule;
-		fsStageInfo.pName = "main";	// Specify entry point function
-		//fsStageInfo.pSpecializationInfo	// Specify values for shader constants
-	}
-
-	VkPipelineShaderStageCreateInfo shaderStages[] = { vsStageInfo, fsStageInfo };
-	
-	// Describe the vertex data being passed to the shader
-	// Bindings - spacing between data and whether the data is per vertex or per instance
-	auto bindingDescription = Vertex::GetBindingDescription();
-	// Attribute descriptions - the type of data being passed in and how to load them
-	auto attributeDescription = Vertex::GetAttributeDescriptions();
-	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-	{
-		// We have no vertex data to pass to the shader so we don't really need to do anything else here.
-		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-		vertexInputInfo.vertexBindingDescriptionCount = 1;
-		vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-		vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescription.size());
-		vertexInputInfo.pVertexAttributeDescriptions = attributeDescription.data();
-	}
-
-	// Input assembly
-	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-	{
-		inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-		inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-		inputAssembly.primitiveRestartEnable = VK_FALSE;
-	}
-
-	// Viewports
-	// Describe the region of the frame buffer to render to
-	VkViewport viewport{};
-	{
-		viewport.x = 0.0f;
-		viewport.y = 0.0f;
-		viewport.width = (float)VulkanManager::GetVulkanManager().GetSwapChainExtent().width;
-		viewport.height = (float)VulkanManager::GetVulkanManager().GetSwapChainExtent().height;
-		viewport.minDepth = 0.0f;
-		viewport.maxDepth = 1.0f;
-	}
-
-	// Scissors
-	// Which regions pixels will be stored.
-	// The rasterizer will discard pixels that are outside the scissor.
-	VkRect2D scissor{};
-	{
-		scissor.offset = { 0, 0 };
-		scissor.extent = VulkanManager::GetVulkanManager().GetSwapChainExtent();
-	}
-	
-	// Create the viewport
-	VkPipelineViewportStateCreateInfo viewportState{};
-	{
-		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-		viewportState.viewportCount = 1;
-		viewportState.pViewports = &viewport;
-		viewportState.scissorCount = 1;
-		viewportState.pScissors = &scissor;
-	}
-
-	// Rasterizer
-	VkPipelineRasterizationStateCreateInfo rasterizer{};
-	{
-		rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-		rasterizer.depthClampEnable = VK_FALSE;
-		rasterizer.rasterizerDiscardEnable = VK_FALSE;	// Setting to true results in geometry never going to the fragment shader
-		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;	// How fragments are generated for geometry
-		rasterizer.lineWidth = 1.0f;
-		rasterizer.cullMode = VK_CULL_MODE_NONE;
-		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;	// Vertex order to be considered front facing
-		rasterizer.depthBiasEnable = VK_FALSE;
-		rasterizer.depthBiasConstantFactor = 0.0f;
-		rasterizer.depthBiasClamp = 0.0f;
-		rasterizer.depthBiasSlopeFactor = 0.0f;
-	}
-
-	// Multisampling (AA)
-	// Combines results of the fragment shader from multiple polygons that write to the same pixel.
-	// This only runs if *multiple* polygons are detected.
-	VkPipelineMultisampleStateCreateInfo multisampling{};
-	{
-		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-		multisampling.sampleShadingEnable = VK_FALSE;
-		multisampling.rasterizationSamples = VulkanManager::GetVulkanManager().GetMSAASamples();
-		multisampling.minSampleShading = 1.0f;
-		multisampling.pSampleMask = nullptr;
-		multisampling.alphaToCoverageEnable = VK_FALSE;
-		multisampling.alphaToOneEnable = VK_FALSE;
-	}
-
-	// Depth testing
-	VkPipelineDepthStencilStateCreateInfo depthStencil{};
-	{
-		depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-		depthStencil.depthTestEnable = VK_TRUE;
-		depthStencil.depthWriteEnable = VK_TRUE;
-		depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
-		depthStencil.depthBoundsTestEnable = VK_FALSE;
-		depthStencil.minDepthBounds = 0;
-		depthStencil.maxDepthBounds = 1;
-	}
-
-	// Color blending
-	// Describes how to blend results from the fragment shader of a pixel.
-	// VkPipelineColorBlendAttachmentState for the attached frame buffer
-	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-	{
-		// The idea is:
-		// if(blendEnable)
-		// {
-		//		finalColor = (srcColorBlendFactor * newColor) <blend op> (dstColorBlendFactor * oldColor);
-		//		finalAlpha = (srcAlphaBlendFactor * newAlpha) <alpha blend op> (dstAlphaBlendFactor * oldAlpha)
-		// }
-		// else
-		// {
-		//		finalColor = newColor;	// just take the new color.
-		// }
-		// 
-		// finalColor = finalColor & colorWriteMask; // determine which channels get written to the buffer
-		
-		colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-		colorBlendAttachment.blendEnable = VK_FALSE;
-		colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-		colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-		colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-		colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-		colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-		colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
-	}
-	
-	// VkPipelineColorBlendStateCreateInfo for all frame buffers.
-	VkPipelineColorBlendStateCreateInfo colorBlending{};
-	{
-		colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-		colorBlending.logicOpEnable = VK_FALSE;
-		colorBlending.logicOp = VK_LOGIC_OP_COPY;
-		colorBlending.attachmentCount = 1;
-		colorBlending.pAttachments = &colorBlendAttachment;
-		colorBlending.blendConstants[0] = 0.0f;
-		colorBlending.blendConstants[1] = 0.0f;
-		colorBlending.blendConstants[2] = 0.0f;
-		colorBlending.blendConstants[3] = 0.0f;
-	}
-
-	// Dynamic state
-	// Some states can be changed without recreating the pipeline (viewport, blending)
-	// We will need to specify these values at each draw call.
-	VkDynamicState dynamicStates[] = {
-		VK_DYNAMIC_STATE_VIEWPORT,
-		VK_DYNAMIC_STATE_LINE_WIDTH,
-	};
-
-	VkPipelineDynamicStateCreateInfo dynamicState{};
-	{
-		dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-		dynamicState.dynamicStateCount = 2;
-		dynamicState.pDynamicStates = dynamicStates;
-	}
-
-	// Describe the pipeline
-	// Specify which descriptor set the shaders are using.
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-	{
-		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutInfo.setLayoutCount = 1;
-		pipelineLayoutInfo.pSetLayouts = &m_sampleModel.GetDescriptorSetLayout();
-		pipelineLayoutInfo.pushConstantRangeCount = 0;
-		pipelineLayoutInfo.pPushConstantRanges = nullptr;
-	}
-
-	VK_ASSERT(vkCreatePipelineLayout(VulkanManager::GetVulkanManager().GetDevice(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout), "Failed to create pipeline layout");
-
-	// Create graphics pipeline
-	VkGraphicsPipelineCreateInfo pipelineInfo{};
-	{
-		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-		pipelineInfo.stageCount = 2;
-		pipelineInfo.pStages = shaderStages;
-
-		// Reference all the structures describing the fixed-function stage.
-		{
-			pipelineInfo.pVertexInputState = &vertexInputInfo;
-			pipelineInfo.pInputAssemblyState = &inputAssembly;
-			pipelineInfo.pViewportState = &viewportState;
-			pipelineInfo.pRasterizationState = &rasterizer;
-			pipelineInfo.pMultisampleState = &multisampling;
-			pipelineInfo.pColorBlendState = &colorBlending;
-		}
-
-		pipelineInfo.layout = m_pipelineLayout;
-
-		// Reference render pass and the subpass of this graphics pipeline.
-		{
-			pipelineInfo.renderPass = m_sampleModel.GetRenderPass();
-			pipelineInfo.subpass = 0;
-		}
-
-		// Any render pass can be used with this pipeline as long as they are compatible with m_sampleModel.GetRenderPass().
-		// You can create a new pass by deriving from this pipeline.
-		{
-			pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
-			pipelineInfo.basePipelineIndex = -1;
-		}
-
-		pipelineInfo.pDepthStencilState = &depthStencil;
-	}
-
-	VK_ASSERT(vkCreateGraphicsPipelines(VulkanManager::GetVulkanManager().GetDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_graphicsPipeline), "Failed to create a graphics pipeline");
-	
-	vkDestroyShaderModule(VulkanManager::GetVulkanManager().GetDevice(), vsModule, nullptr);
-	vkDestroyShaderModule(VulkanManager::GetVulkanManager().GetDevice(), fsModule, nullptr);
-}
-
-VkShaderModule HelloTriangle::CreateShaderModule(const std::vector<char>& code)
-{
-	// Wraps the code in a VkShaderModule object.
-
-	VkShaderModuleCreateInfo createInfo{};
-	{
-		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-		createInfo.codeSize = code.size();
-		createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
-	}
-
-	VkShaderModule shaderModule;
-	if (vkCreateShaderModule(VulkanManager::GetVulkanManager().GetDevice(), &createInfo, nullptr, &shaderModule))
-	{
-		throw std::runtime_error("Failed to create shader module");
-	}
-
-	return shaderModule;
+	m_sampleModel.CreateGraphicsPipeline();
 }
 
 void HelloTriangle::CreateRenderPasses()
@@ -649,223 +398,29 @@ void HelloTriangle::CreateCommandPool()
 	m_sampleModel.CreateCommandPool();
 }
 
-void HelloTriangle::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& memory)
-{
-	// Create a buffer for CPU to store data in for the GPU to read -----
-	VkBufferCreateInfo bufferInfo{};
-	{
-		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		bufferInfo.size = size;
-		bufferInfo.usage = usage;
-		// Buffers can be owned by specific queue families or shared between multiple families.
-		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;	// We are using this buffer from the graphics queue.
-
-		VK_ASSERT(vkCreateBuffer(VulkanManager::GetVulkanManager().GetDevice(), &bufferInfo, nullptr, &buffer), "Failed to create vertex buffer");
-	}
-
-	// Figure out how much memory we need to load -----
-	VkMemoryRequirements memoryRequirements;
-	{
-		vkGetBufferMemoryRequirements(VulkanManager::GetVulkanManager().GetDevice(), buffer, &memoryRequirements);
-	}
-	
-	// Memory allocation -----
-	VkMemoryAllocateInfo allocInfo{};
-	{
-		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		allocInfo.allocationSize = memoryRequirements.size;
-		// FINDING THE RIGHT MEMORY TYPE IS VERY VERY VERY IMPORTANT TO MAP BUFFERS.
-		allocInfo.memoryTypeIndex = FindMemoryType(memoryRequirements.memoryTypeBits, properties);
-
-		// Store handle to memory
-		VK_ASSERT(vkAllocateMemory(VulkanManager::GetVulkanManager().GetDevice(), &allocInfo, nullptr, &memory), "Failed to allocate vertex buffer memory");
-	}
-
-	// Bind the buffer memory -----
-	// We're allocating specifically for this vertex buffer, no offset.
-	// Offset has to be divisible by memoryRequirements.alignment otherwise.
-	VK_ASSERT(vkBindBufferMemory(VulkanManager::GetVulkanManager().GetDevice(), buffer, memory, 0), "Failed to bind vertex buffer");
-}
-
-// Copy from srcBuffer to dstBuffer.
-void HelloTriangle::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
-{
-	// Transfer operations are done through command buffers.
-	// This can be a temporary command buffer or through the command pool.
-
-	VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
-
-	VkBufferCopy copyRegion{};
-	{
-		copyRegion.srcOffset = 0;
-		copyRegion.dstOffset = 0;
-		copyRegion.size = size;
-	}
-	
-	vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
-
-	EndSingleTimeCommands(commandBuffer);
-}
-
-void HelloTriangle::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
-{
-	VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
-
-	VkBufferImageCopy region{};
-	{
-		region.bufferOffset = 0;	// Offset where pixels start
-
-		// How pixels are laid out in memory
-		// Zero means pixels are tightly packed.
-		// Nonzero means the pixels are padded.
-		{
-			region.bufferRowLength = 0;
-			region.bufferImageHeight = 0;
-		}
-		
-		// Which region of the image should be copied
-		{
-			region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			region.imageSubresource.mipLevel = 0;
-			region.imageSubresource.baseArrayLayer = 0;
-			region.imageSubresource.layerCount = 1;
-			region.imageOffset = { 0, 0, 0 };
-			region.imageExtent = { width, height, 1 };
-		}
-	}
-
-	vkCmdCopyBufferToImage(
-		commandBuffer, 
-		buffer, 
-		image, 
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,	// Which layout the image is currently using
-		1,
-		&region);
-	
-	EndSingleTimeCommands(commandBuffer);
-}
-
 void HelloTriangle::CreateVertexBuffer()
 {
-	auto bufferSize = sizeof(Vertex) * m_vertices.size();
-
-	// Create a temporary buffer -----
-	// Use the staging buffer to map and copy vertex data.
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-	
-	// VK_BUFFER_USAGE_TRANSFER_SRC_BIT - Use this buffer as the source in transferring memory.
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-	
-	// Fill the vertex buffer -----
-	void* data;
-	{
-		// Map buffer memory into CPU accessible memory.
-		VK_ASSERT(vkMapMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map data to vertex buffer");
-		
-		// Copy data over
-		memcpy(data, m_vertices.data(), (size_t)bufferSize);
-		
-		// Unmap
-		vkUnmapMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory);
-	}
-
-	// VK_BUFFER_USAGE_TRANSFER_DST_BIT - Use this buffer as the destination in transferring memory.
-	// VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT - The most optimal use of memory. We need to use a staging buffer for this since it's not directly accessible with CPU.
-	// The vertex buffer is device local. This means that we can't map memory directly to it but we can copy data from another buffer over.
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_vertexBuffer, m_vertexBufferMemory);
-
-	// Copy from stage to vertex buffer
-	CopyBuffer(stagingBuffer, m_vertexBuffer, bufferSize);
-
-	// Destroy staging buffer
-	{
-		vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), stagingBuffer, nullptr);
-		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory, nullptr);
-	}
+	VulkanManager::GetVulkanManager().CreateVertexBufer(m_vertices, m_vertexBuffer, m_vertexBufferMemory, m_sampleModel.GetCommandPool());
 }
 
 void HelloTriangle::CreateIndexBuffer()
 {
-	VkDeviceSize bufferSize = sizeof(m_indices[0]) * m_indices.size();
-
-	// Create a temporary buffer -----
-	// Use the staging buffer to map and copy index data.
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-
-	// VK_BUFFER_USAGE_TRANSFER_SRC_BIT - Use this buffer as the source in transferring memory.
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-
-	// Fill the index buffer -----
-	void* data;
-	{
-		// Map buffer memory into CPU accessible memory.
-		VK_ASSERT(vkMapMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory, 0, bufferSize, 0, &data), "Failed to map data to index buffer");
-
-		// Copy data over
-		memcpy(data, m_indices.data(), (size_t)bufferSize);
-
-		// Unmap
-		vkUnmapMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory);
-	}
-
-	// VK_BUFFER_USAGE_TRANSFER_DST_BIT - Use this buffer as the destination in transferring memory.
-	// VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT - The most optimal use of memory. We need to use a staging buffer for this since it's not directly accessible with CPU.
-	// The vertex buffer is device local. This means that we can't map memory directly to it but we can copy data from another buffer over.
-	CreateBuffer(bufferSize, 
-		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, 
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
-		m_indexBuffer, 
-		m_indexBufferMemory);
-
-	// Copy from stage to vertex buffer
-	CopyBuffer(stagingBuffer, m_indexBuffer, bufferSize);
-
-	// Destroy staging buffer
-	{
-		vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), stagingBuffer, nullptr);
-		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory, nullptr);
-	}
-}
-
-void HelloTriangle::UpdateUniformBuffers(uint32_t currentImage)
-{
-	m_sampleModel.UpdateUniformBuffers(currentImage);
+	VulkanManager::GetVulkanManager().CreateIndexBuffer(m_indices, m_indexBuffer, m_indexBufferMemory, m_sampleModel.GetCommandPool());
 }
 
 void HelloTriangle::CreateUniformBuffers()
 {
-	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
-	{
-		m_sampleModel.m_uniformBuffers.resize(VulkanManager::GetVulkanManager().GetSwapChainImages().size());
-		m_sampleModel.m_uniformBuffersMemory.resize(VulkanManager::GetVulkanManager().GetSwapChainImages().size());
-	}
-
-	for (size_t i = 0; i < VulkanManager::GetVulkanManager().GetSwapChainImages().size(); ++i)
-	{
-		CreateBuffer(bufferSize, 
-			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
-			m_sampleModel.m_uniformBuffers[i],
-			m_sampleModel.m_uniformBuffersMemory[i]);
-	}
+	VulkanManager::GetVulkanManager().CreateUniformBuffer(m_sampleModel.m_uniformBuffers, m_sampleModel.m_uniformBuffersMemory);
 }
 
 void HelloTriangle::CreateDescriptorPools()
 {
-	CreateMainDescriptorPool();
+	// Descriptor sets must be allocated from a command pool.
+	m_sampleModel.CreateDescriptorPool();
 
 #if IMGUI_ENABLED
 	m_imguiManager.CreateDescriptorPool();
 #endif
-}
-
-void HelloTriangle::CreateMainDescriptorPool()
-{
-	// Descriptor sets must be allocated from a command pool.
-	
-	m_sampleModel.CreateDescriptorPool();
 }
 
 void HelloTriangle::CreateDescriptorSets()
@@ -901,8 +456,8 @@ void HelloTriangle::CreateDescriptorSets()
 		VkDescriptorImageInfo imageInfo{};
 		{
 			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			imageInfo.imageView = m_textureImageView;
-			imageInfo.sampler = m_textureSampler;
+			imageInfo.imageView = m_sampleModel.m_textureImageView;
+			imageInfo.sampler = m_sampleModel.m_textureSampler;
 		}
 
 		// Set up for update
@@ -932,27 +487,6 @@ void HelloTriangle::CreateDescriptorSets()
 		// Update the descriptor set
 		vkUpdateDescriptorSets(VulkanManager::GetVulkanManager().GetDevice(), static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 	}
-}
-
-uint32_t HelloTriangle::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
-{
-	// Query the types of memory
-
-	VkPhysicalDeviceMemoryProperties memoryProperties;
-	vkGetPhysicalDeviceMemoryProperties(VulkanManager::GetVulkanManager().GetPhysicalDevice(), &memoryProperties);
-
-	// Find the memory type that is suitable with the buffer and make sure it has the properties to do so.
-	for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i)
-	{
-		if (typeFilter & (1 << i) && (memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
-		{
-			return i;
-		}
-	}
-
-	ASSERT(false, "Failed to find suitable memory type");
-
-	return -1;
 }
 
 void HelloTriangle::CreateCommandBuffers()
@@ -1012,7 +546,7 @@ void HelloTriangle::CreateCommandBuffers()
 		// Basic drawing
 		vkCmdBindPipeline(	m_commandBuffers[i], 
 							VK_PIPELINE_BIND_POINT_GRAPHICS,	// Graphics or compute pipeline	
-							m_graphicsPipeline
+							m_sampleModel.m_graphicsPipeline
 		);
 
 		// Bind vertex buffer
@@ -1024,7 +558,7 @@ void HelloTriangle::CreateCommandBuffers()
 		vkCmdBindIndexBuffer(m_commandBuffers[i], m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 		// Bind descriptor sets
-		vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
+		vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_sampleModel.m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
 
 		// Draw
 		vkCmdDrawIndexed(m_commandBuffers[i], static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
@@ -1042,453 +576,19 @@ void HelloTriangle::CreateCommandBuffers()
 
 VkCommandBuffer HelloTriangle::BeginSingleTimeCommands()
 {
-	VkCommandBufferAllocateInfo allocInfo{};
-	{
-		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocInfo.commandPool = m_sampleModel.GetCommandPool();
-		allocInfo.commandBufferCount = 1;
-	}
-
-	VkCommandBuffer commandBuffer;
-	VK_ASSERT(vkAllocateCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), &allocInfo, &commandBuffer), "Failed to allocate command buffers");
-
-	VkCommandBufferBeginInfo beginInfo{};
-	{
-		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-	}
-
-	VK_ASSERT(vkBeginCommandBuffer(commandBuffer, &beginInfo), "Failed to begin command buffer");
-
-	return commandBuffer;
+	return VulkanManager::GetVulkanManager().BeginSingleTimeCommands(m_sampleModel.GetCommandPool());
 }
 
 void HelloTriangle::EndSingleTimeCommands(VkCommandBuffer commandBuffer)
 {
-	vkEndCommandBuffer(commandBuffer);
-
-	// Stop recording since we already recorded the copy command.
-	VkSubmitInfo submitInfo{};
-	{
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBuffer;
-	}
-
-	VK_ASSERT(vkQueueSubmit(VulkanManager::GetVulkanManager().GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE), "Failed to submit queue");
-
-	// Wait for the transfer to finish.
-	VK_ASSERT(vkQueueWaitIdle(VulkanManager::GetVulkanManager().GetGraphicsQueue()), "Failed to wait");
-
-	vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_sampleModel.GetCommandPool(), 1, &commandBuffer);
-}
-
-void HelloTriangle::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples,
-                                VkFormat format, VkImageTiling tiliing, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
-{
-	VkImageCreateInfo imageInfo{};
-	{
-		imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-		imageInfo.imageType = VK_IMAGE_TYPE_2D;
-		imageInfo.extent.width = static_cast<uint32_t>(width);
-		imageInfo.extent.height = static_cast<uint32_t>(height);
-		imageInfo.extent.depth = 1;
-		imageInfo.mipLevels = mipLevels;
-		imageInfo.arrayLayers = 1;
-		imageInfo.format = format;
-		imageInfo.tiling = tiliing;
-		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		imageInfo.usage = usage;
-		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		imageInfo.samples = numSamples;
-		imageInfo.flags = 0;
-	}
-
-	// Create the image
-	VK_ASSERT(vkCreateImage(VulkanManager::GetVulkanManager().GetDevice(), &imageInfo, nullptr, &image), "Failed to create image");
-
-	VkMemoryRequirements memoryRequirements{};
-	vkGetImageMemoryRequirements(VulkanManager::GetVulkanManager().GetDevice(), image, &memoryRequirements);
-
-	VkMemoryAllocateInfo allocInfo{};
-	{
-		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		allocInfo.allocationSize = memoryRequirements.size;
-		allocInfo.memoryTypeIndex = FindMemoryType(memoryRequirements.memoryTypeBits, properties);
-	}
-
-	VK_ASSERT(vkAllocateMemory(VulkanManager::GetVulkanManager().GetDevice(), &allocInfo, nullptr, &imageMemory), "Failed to allocate image memory");
-
-	vkBindImageMemory(VulkanManager::GetVulkanManager().GetDevice(), image, imageMemory, 0);
-}
-
-void HelloTriangle::CreateTextureImage()
-{
-	int texWidth, texHeight, texChannels;
-	// Get image
-	stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-
-	VkDeviceSize imageSize = texWidth * texHeight * 4;	// Multiply by 4 for each channel RGBA
-	
-	// Calculate mip levels
-	{
-		// Find largest dimension
-		auto maxDimension = std::max(texWidth, texHeight);
-		// Determine how many times the dimension can be divided by 2
-		auto divisibleBy2 = std::log2(maxDimension);
-		// Make sure result is a power of 2
-		auto mipLevels= std::floor(divisibleBy2);
-		// Add 1 so the original image has a mip level
-		m_mipLevels = static_cast<uint32_t>(mipLevels + 1);
-	}
-	
-	if (!pixels)
-	{
-		ASSERT(false, "Failed to load texture image");
-	}
-	
-	// Create buffer
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-	CreateBuffer(	imageSize, 
-					VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
-					stagingBuffer, 
-					stagingBufferMemory);
-
-	// TODO: this should be its own function
-	// Map to temp buffer
-	{
-		void* data;
-		VK_ASSERT(vkMapMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory, 0, imageSize, 0, &data), "Failed to map buffer");
-		memcpy(data, pixels, static_cast<size_t>(imageSize));
-		vkUnmapMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory);
-	}
-
-	// We loaded everything into data so we can now clean up pixels.
-	stbi_image_free(pixels);
-
-	// With mipmapping enabled, source has to also be VK_IMAGE_USAGE_TRANSFER_SRC_BIT.
-	auto usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-	
-	// Create the image
-	CreateImage(texWidth, 
-	            texHeight,
-	            m_mipLevels,
-	            VK_SAMPLE_COUNT_1_BIT, 
-	            VK_FORMAT_R8G8B8A8_SRGB, 
-	            VK_IMAGE_TILING_OPTIMAL,
-	            usage, 
-	            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
-	            m_textureImage, m_textureImageMemory);
-
-	// Copy the staging buffer to the image
-	TransitionImageLayout(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, m_mipLevels);
-	CopyBufferToImage(stagingBuffer, m_textureImage, texWidth, texHeight);
-
-	vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), stagingBuffer, nullptr);
-	vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice()	, stagingBufferMemory, nullptr);
-	
-	// Generating mipmaps transitions the layout to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL.
-	GenerateMipmaps(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, texWidth, texHeight, m_mipLevels);
-}
-
-void HelloTriangle::TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout,
-                                          VkImageLayout newLayout, uint32_t mipLevels)
-{
-	// Transition image from old layout to new layout
-
-	VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
-
-	// Use a barrier to sync access to resources, transition image layouts, transfer queue family ownership.
-	// It's important to be explicit in what you're doing with the resource.
-
-	VkImageMemoryBarrier barrier{};
-	{
-		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier.oldLayout = oldLayout;
-		barrier.newLayout = newLayout;
-		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.image = image;
-
-		// Which part of the image are we syncing
-		{
-			barrier.subresourceRange.baseMipLevel = 0;
-			barrier.subresourceRange.levelCount = mipLevels;
-			barrier.subresourceRange.baseArrayLayer = 0;
-			barrier.subresourceRange.layerCount = 1;
-
-			if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-			{
-				barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-
-				if (HasStencilComponent(format))
-				{
-					barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-				}
-			}
-			else
-			{
-				barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			}
-		}
-	}
-
-	VkPipelineStageFlags sourceStage;
-	VkPipelineStageFlags destinationStage;
-	
-	// Transition rules:
-	// Undefined --> transfer destination
-	// Transfer destination --> shader read
-	if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-	{
-		barrier.srcAccessMask = 0;
-		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-		// TODO: read up more on this
-		sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;	// Earliest pipeline stage
-		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-	}
-	else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-	{
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-		sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-	}
-	else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-	{
-		barrier.srcAccessMask = 0;
-		barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-		sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-		destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-	}
-	else
-	{
-		ASSERT(false, "Unsupported layout transition");
-	}
-
-	vkCmdPipelineBarrier(
-		commandBuffer,
-		sourceStage,		// Which stage the operations should occur before the barrier
-		destinationStage,	// Which stage should wait on the barrier
-		0,	
-		0,
-		nullptr,
-		0,
-		nullptr,
-		1,
-		&barrier);
-	
-	EndSingleTimeCommands(commandBuffer);
-}
-
-void HelloTriangle::CreateTextureImageView()
-{
-	// Create a view in order to access images just like with the swap chain.
-	m_textureImageView = VulkanManager::GetVulkanManager().CreateImageView(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, m_mipLevels);
-}
-
-void HelloTriangle::CreateTextureSampler()
-{
-	// Textures should be accessed through a sampler.
-	// Samplers will apply filtering and transformations.
-
-	VkPhysicalDeviceProperties properties{};
-	vkGetPhysicalDeviceProperties(VulkanManager::GetVulkanManager().GetPhysicalDevice(), &properties);
-	
-	VkSamplerCreateInfo samplerInfo{};
-	{
-		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-
-		// How to interpolate texels
-		{
-			samplerInfo.magFilter = VK_FILTER_LINEAR;
-			samplerInfo.minFilter = VK_FILTER_LINEAR;
-		}
-
-		// Clamp, Wrap
-		{
-			samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-			samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-			samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		}
-
-		// Limit the amount of texel samples used to calculate the final color.
-		{
-			samplerInfo.anisotropyEnable = VK_TRUE;
-			samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
-		}
-
-		// Which color is returned when sampling beyond the image.
-		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-
-		// Which coordinate system to use to address texels the image.
-		// TRUE -> [0, texWidth) and [0, texHeight)
-		// FALSE -> [0, 1)
-		samplerInfo.unnormalizedCoordinates = VK_FALSE;
-
-		// Texels will be compared to a value and the result is used for filtering.
-		// TODO: future chapter.
-		{
-			samplerInfo.compareEnable = VK_FALSE;
-			samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-		}
-
-		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-		samplerInfo.mipLodBias = 0.0f;
-		samplerInfo.minLod = 0.0f;
-		samplerInfo.maxLod = static_cast<float>(m_mipLevels);
-	}
-
-	// The sampler is distinct from the image. The sampler is a way to get data from a texture so we don't need to ref the image here.
-	// This is different than other APIs which requires referring to the actual image.
-	VK_ASSERT(vkCreateSampler(VulkanManager::GetVulkanManager().GetDevice(), &samplerInfo, nullptr, &m_textureSampler), "Couldn't create texture sampler");
-}
-
-void HelloTriangle::GenerateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels)
-{
-	// Check if format supports linear blitting. Not all platforms support this.
-	VkFormatProperties formatProperties;
-	vkGetPhysicalDeviceFormatProperties(VulkanManager::GetVulkanManager().GetPhysicalDevice(), imageFormat, &formatProperties);
-
-	if (!(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT))
-	{
-		throw std::runtime_error("No support for linear blitting");
-	}
-	
-	VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
-
-	VkImageMemoryBarrier barrier{};
-	{
-		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier.image = image;
-		barrier.srcQueueFamilyIndex	= VK_QUEUE_FAMILY_IGNORED;
-		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		barrier.subresourceRange.baseArrayLayer = 0;
-		barrier.subresourceRange.layerCount = 1;
-		barrier.subresourceRange.levelCount = 1;
-	}
-
-	auto mipWidth = texWidth;
-	auto mipHeight = texHeight;
-
-	for (uint32_t i = 1; i < mipLevels; ++i)
-	{
-		auto currentMipLevel = i - 1;
-		auto nextMipLevel = i;
-		
-		barrier.subresourceRange.baseMipLevel = currentMipLevel;
-		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-
-		vkCmdPipelineBarrier(
-			commandBuffer, 
-			VK_PIPELINE_STAGE_TRANSFER_BIT, 
-			VK_PIPELINE_STAGE_TRANSFER_BIT, 
-			0, 
-			0, 
-			nullptr, 
-			0, 
-			nullptr, 
-			1, 
-			&barrier);
-
-		// Transition current mip level to VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-		VkImageBlit blit{};
-		{
-			// Specify regions of the blit.
-
-			{
-				blit.srcOffsets[0] = {0,0,0};
-				blit.srcOffsets[1] = {mipWidth, mipHeight, 1};
-				blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-				blit.srcSubresource.mipLevel = currentMipLevel;
-				blit.srcSubresource.baseArrayLayer = 0;
-				blit.srcSubresource.layerCount = 1;
-			}
-
-			{
-				blit.dstOffsets[0] = {0,0,0};
-				blit.dstOffsets[1] = {
-					mipWidth > 1 ? mipWidth / 2 : 1,		// Divide by two since each mip level is half the previous.
-					mipHeight > 1 ? mipHeight / 2 : 1,
-					1
-				};
-				blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-				blit.dstSubresource.mipLevel = nextMipLevel;
-				blit.dstSubresource.baseArrayLayer = 0;
-				blit.dstSubresource.layerCount = 1;
-			}
-		}
-
-		// Blitting between different levels of the same image, source and destination are the same.
-		vkCmdBlitImage(
-			commandBuffer,
-			image,
-			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			image,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			1,
-			&blit,
-			VK_FILTER_LINEAR);
-
-		// Transition from current mip level to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-		{
-			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-			barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-			vkCmdPipelineBarrier(
-				commandBuffer,
-				VK_PIPELINE_STAGE_TRANSFER_BIT,
-				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-				0,
-				0, nullptr,
-				0, nullptr,
-				1, &barrier);
-		}
-
-		if (mipWidth > 1)
-			mipWidth /= 2;
-		if (mipHeight > 1)
-			mipHeight /= 2;
-	}
-
-	// Transition the last mip level.
-	{
-		barrier.subresourceRange.baseMipLevel = mipLevels - 1;
-		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-		vkCmdPipelineBarrier(
-			commandBuffer,
-			VK_PIPELINE_STAGE_TRANSFER_BIT,
-			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-			0,
-			0, nullptr,
-			0, nullptr,
-			1, &barrier);
-	}
-
-	EndSingleTimeCommands(commandBuffer);
+	VulkanManager::GetVulkanManager().EndSingleTimeCommands(commandBuffer, m_sampleModel.GetCommandPool());
 }
 
 void HelloTriangle::CreateDepthResources()
 {
 	VkFormat depthFormat = FindDepthFormat();
 
-	CreateImage(	VulkanManager::GetVulkanManager().GetSwapChainExtent().width, 
+	VulkanManager::GetVulkanManager().CreateImage(	VulkanManager::GetVulkanManager().GetSwapChainExtent().width,
 	                VulkanManager::GetVulkanManager().GetSwapChainExtent().height,
 	                1,
 	                VulkanManager::GetVulkanManager().GetMSAASamples(), 
@@ -1499,20 +599,7 @@ void HelloTriangle::CreateDepthResources()
 
 	m_depthImageView = VulkanManager::GetVulkanManager().CreateImageView(m_depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 
-	TransitionImageLayout(m_depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
-}
-
-//VkFormat HelloTriangle::FindDepthFormat()
-//{
-//	return FindSupportedFormat(
-//		{ VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT },
-//		VK_IMAGE_TILING_OPTIMAL,
-//		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
-//}
-
-bool HelloTriangle::HasStencilComponent(VkFormat format)
-{
-	return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
+	VulkanManager::GetVulkanManager().TransitionImageLayout(m_sampleModel.GetCommandPool(), m_depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
 }
 
 void HelloTriangle::CreateColorResources()
@@ -1521,7 +608,7 @@ void HelloTriangle::CreateColorResources()
 
 	VkFormat colorFormat = VulkanManager::GetVulkanManager().GetSwapChainImageFormat();
 
-	CreateImage(
+	VulkanManager::GetVulkanManager().CreateImage(
 		VulkanManager::GetVulkanManager().GetSwapChainExtent().width, 
 		VulkanManager::GetVulkanManager().GetSwapChainExtent().height,
 		1, VulkanManager::GetVulkanManager().GetMSAASamples(), 
@@ -1554,8 +641,9 @@ void HelloTriangle::CleanupSwapChain()
 
 	vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_sampleModel.GetCommandPool(), static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
 
-	vkDestroyPipeline(VulkanManager::GetVulkanManager().GetDevice(), m_graphicsPipeline, nullptr);
-	vkDestroyPipelineLayout(VulkanManager::GetVulkanManager().GetDevice(), m_pipelineLayout, nullptr);
+	// Moved to Samplemodel
+	vkDestroyPipeline(VulkanManager::GetVulkanManager().GetDevice(), m_sampleModel.m_graphicsPipeline, nullptr);
+	vkDestroyPipelineLayout(VulkanManager::GetVulkanManager().GetDevice(), m_sampleModel.m_pipelineLayout, nullptr);
 	vkDestroyRenderPass(VulkanManager::GetVulkanManager().GetDevice(), m_sampleModel.GetRenderPass(), nullptr);
 
 	for (auto& imageView : VulkanManager::GetVulkanManager().GetSwapChainImageViews())
@@ -1578,10 +666,10 @@ void HelloTriangle::Cleanup()
 {
 	CleanupSwapChain();
 
-	vkDestroySampler(VulkanManager::GetVulkanManager().GetDevice(), m_textureSampler, nullptr);
-	vkDestroyImageView(VulkanManager::GetVulkanManager().GetDevice(), m_textureImageView, nullptr);
-	vkDestroyImage(VulkanManager::GetVulkanManager().GetDevice(), m_textureImage, nullptr);
-	vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_textureImageMemory, nullptr);
+	vkDestroySampler(VulkanManager::GetVulkanManager().GetDevice(), m_sampleModel.m_textureSampler, nullptr);
+	vkDestroyImageView(VulkanManager::GetVulkanManager().GetDevice(), m_sampleModel.m_textureImageView, nullptr);
+	vkDestroyImage(VulkanManager::GetVulkanManager().GetDevice(), m_sampleModel.m_textureImage, nullptr);
+	vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_sampleModel.m_textureImageMemory, nullptr);
 
 	vkDestroyDescriptorSetLayout(VulkanManager::GetVulkanManager().GetDevice(), m_sampleModel.GetDescriptorSetLayout(), nullptr);
 	

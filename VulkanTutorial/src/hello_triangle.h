@@ -55,7 +55,6 @@ private:
 	
 	void CreateDescriptorSetLayout();
 	void CreateGraphicsPipeline();
-	VkShaderModule CreateShaderModule(const std::vector<char>& code);
 
 	void CreateRenderPasses();
 
@@ -63,15 +62,12 @@ private:
 
 	void CreateCommandPool();
 
-	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& memory);
-	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 	void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 	// TODO: abstract out vbo and ibo functions.
 	void CreateVertexBuffer();
 	void CreateIndexBuffer();
 	void CreateUniformBuffers();
 	void CreateDescriptorPools();
-	void CreateMainDescriptorPool();
 	void CreateDescriptorSets();
 	void UpdateUniformBuffers(uint32_t currentImage);
 	uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
@@ -80,7 +76,6 @@ private:
 	VkCommandBuffer BeginSingleTimeCommands();
 	void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 
-	void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiliing, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 	void CreateTextureImage();
 	void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
 	void CreateTextureImageView();
@@ -97,8 +92,8 @@ private:
 	std::vector<VkFramebuffer> m_swapChainFrameBuffers;
 	
 	VkDescriptorSetLayout m_descriptorSetLayout;
-	VkPipelineLayout m_pipelineLayout;
-	VkPipeline m_graphicsPipeline;
+	//VkPipelineLayout m_pipelineLayout;
+	//VkPipeline m_graphicsPipeline;
 
 	// Manage the memory being used to store/allocate buffers.
 	// Write all the ops you want into the command buffer then
@@ -111,13 +106,6 @@ private:
 	VkDeviceMemory m_vertexBufferMemory;
 	VkBuffer m_indexBuffer;
 	VkDeviceMemory m_indexBufferMemory;
-
-	// Textures
-	uint32_t m_mipLevels;
-	VkImage m_textureImage;
-	VkDeviceMemory m_textureImageMemory;
-	VkImageView m_textureImageView;
-	VkSampler m_textureSampler;
 
 	// Depth
 	VkImage m_depthImage;
