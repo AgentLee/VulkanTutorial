@@ -55,6 +55,7 @@ public:
 	void CreateLogicalDevice();
 	void CreateSwapChain();
 	void RecreateSwapChain();
+	void CleanupSwapChain();
 
 	// I think these make more sense in helper...
 	void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiliing, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
@@ -90,7 +91,7 @@ public:
 	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& memory);
 	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkCommandPool& commandPool, VkDeviceSize size);
 	void CopyBufferToImage(VkCommandPool& commandPool, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
-
+	
 	// Should these be const?
 	VkInstance& GetInstance() { return m_instance; }
 	VkSurfaceKHR& GetSurface() { return m_surface; }

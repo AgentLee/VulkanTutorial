@@ -122,13 +122,8 @@ void SampleModel::Cleanup(bool recreateSwapchain = false)
 {
 	if (recreateSwapchain)
 	{
-		vkDestroyImageView(VulkanManager::GetVulkanManager().GetDevice(), m_colorImage.m_view, nullptr);
-		vkDestroyImage(VulkanManager::GetVulkanManager().GetDevice(), m_colorImage.m_image, nullptr);
-		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_colorImage.m_memory, nullptr);
-
-		vkDestroyImageView(VulkanManager::GetVulkanManager().GetDevice(), m_depthImage.m_view, nullptr);
-		vkDestroyImage(VulkanManager::GetVulkanManager().GetDevice(), m_depthImage.m_image, nullptr);
-		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_depthImage.m_memory, nullptr);
+		m_colorImage.Cleanup();
+		m_depthImage.Cleanup();
 
 		for (auto& framebuffer : m_frameBuffers)
 		{
@@ -139,7 +134,7 @@ void SampleModel::Cleanup(bool recreateSwapchain = false)
 
 		vkDestroyPipeline(VulkanManager::GetVulkanManager().GetDevice(), m_graphicsPipeline, nullptr);
 		vkDestroyPipelineLayout(VulkanManager::GetVulkanManager().GetDevice(), m_pipelineLayout, nullptr);
-		vkDestroyRenderPass(VulkanManager::GetVulkanManager().GetDevice(), GetRenderPass(), nullptr);
+		vkDestroyRenderPass(VulkanManager::GetVulkanManager().GetDevice(), m_renderPass, nullptr);
 
 		for (size_t i = 0; i < VulkanManager::GetVulkanManager().GetSwapChainImages().size(); ++i)
 		{
@@ -549,8 +544,6 @@ void SampleModel::CreateDescriptorSetLayout()
 	VK_ASSERT(vkCreateDescriptorSetLayout(VulkanManager::GetVulkanManager().GetDevice(), &layoutInfo, nullptr, &m_descriptorSetLayout), "Failed to create descriptor set layout");
 }
 
-// TODO:
-// Textures need to be bound to this pass.
 void SampleModel::CreateDescriptorSet()
 {
 	std::vector<VkDescriptorSetLayout> layouts(VulkanManager::GetVulkanManager().GetSwapChainImages().size(), GetDescriptorSetLayout());

@@ -44,26 +44,10 @@ private:
 	void Cleanup();
 
 	void InitVulkan();
-	
+
+	// These should be in VulkanManager
 	void RecreateSwapChain();
 	void CleanupSwapChain();
-	
-	void CreateDescriptorSetLayout();
-	void CreateGraphicsPipeline();
-
-	void CreateRenderPasses();
-
-	void CreateFrameBuffers();
-
-	void CreateCommandPool();
-
-	void CreateDescriptorPools();
-	void CreateDescriptorSets();
-
-	void CreateCommandBuffers();
-
-	void CreateDepthResources();
-	void CreateColorResources();
 	
 private:
 	ImGuiManager m_imguiManager;

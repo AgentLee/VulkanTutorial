@@ -280,78 +280,12 @@ void VulkanManager::CreateSwapChain()
 
 void VulkanManager::RecreateSwapChain()
 {
-	// TODO
+	// todo
 }
 
-void VulkanManager::CreateTextureImage(const char* path)
+void VulkanManager::CleanupSwapChain()
 {
-	//int texWidth, texHeight, texChannels;
-	//// Get image
-	//stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-
-	//VkDeviceSize imageSize = texWidth * texHeight * 4;	// Multiply by 4 for each channel RGBA
-
-	//// Calculate mip levels
-	//{
-	//	// Find largest dimension
-	//	auto maxDimension = std::max(texWidth, texHeight);
-	//	// Determine how many times the dimension can be divided by 2
-	//	auto divisibleBy2 = std::log2(maxDimension);
-	//	// Make sure result is a power of 2
-	//	auto mipLevels = std::floor(divisibleBy2);
-	//	// Add 1 so the original image has a mip level
-	//	m_mipLevels = static_cast<uint32_t>(mipLevels + 1);
-	//}
-
-	//if (!pixels)
-	//{
-	//	ASSERT(false, "Failed to load texture image");
-	//}
-
-	//// Create buffer
-	//VkBuffer stagingBuffer;
-	//VkDeviceMemory stagingBufferMemory;
-	//VulkanManager::GetVulkanManager().CreateBuffer(imageSize,
-	//	VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-	//	VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-	//	stagingBuffer,
-	//	stagingBufferMemory);
-
-	//// TODO: this should be its own function
-	//// Map to temp buffer
-	//{
-	//	void* data;
-	//	VK_ASSERT(vkMapMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory, 0, imageSize, 0, &data), "Failed to map buffer");
-	//	memcpy(data, pixels, static_cast<size_t>(imageSize));
-	//	vkUnmapMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory);
-	//}
-
-	//// We loaded everything into data so we can now clean up pixels.
-	//stbi_image_free(pixels);
-
-	//// With mipmapping enabled, source has to also be VK_IMAGE_USAGE_TRANSFER_SRC_BIT.
-	//auto usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-
-	//// Create the image
-	//CreateImage(texWidth,
-	//	texHeight,
-	//	m_mipLevels,
-	//	VK_SAMPLE_COUNT_1_BIT,
-	//	VK_FORMAT_R8G8B8A8_SRGB,
-	//	VK_IMAGE_TILING_OPTIMAL,
-	//	usage,
-	//	VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-	//	m_textureImage, m_textureImageMemory);
-
-	//// Copy the staging buffer to the image
-	//TransitionImageLayout(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, m_mipLevels);
-	//CopyBufferToImage(stagingBuffer, m_textureImage, texWidth, texHeight);
-
-	//vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), stagingBuffer, nullptr);
-	//vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBufferMemory, nullptr);
-
-	//// Generating mipmaps transitions the layout to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL.
-	//GenerateMipmaps(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, texWidth, texHeight, m_mipLevels);
+	// todo
 }
 
 void VulkanManager::CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples,
@@ -377,10 +311,10 @@ void VulkanManager::CreateImage(uint32_t width, uint32_t height, uint32_t mipLev
 	}
 
 	// Create the image
-	VK_ASSERT(vkCreateImage(VulkanManager::GetVulkanManager().GetDevice(), &imageInfo, nullptr, &image), "Failed to create image");
+	VK_ASSERT(vkCreateImage(m_device, &imageInfo, nullptr, &image), "Failed to create image");
 
 	VkMemoryRequirements memoryRequirements{};
-	vkGetImageMemoryRequirements(VulkanManager::GetVulkanManager().GetDevice(), image, &memoryRequirements);
+	vkGetImageMemoryRequirements(m_device, image, &memoryRequirements);
 
 	VkMemoryAllocateInfo allocInfo{};
 	{
@@ -389,9 +323,9 @@ void VulkanManager::CreateImage(uint32_t width, uint32_t height, uint32_t mipLev
 		allocInfo.memoryTypeIndex = FindMemoryType(memoryRequirements.memoryTypeBits, properties);
 	}
 
-	VK_ASSERT(vkAllocateMemory(VulkanManager::GetVulkanManager().GetDevice(), &allocInfo, nullptr, &imageMemory), "Failed to allocate image memory");
+	VK_ASSERT(vkAllocateMemory(m_device, &allocInfo, nullptr, &imageMemory), "Failed to allocate image memory");
 
-	vkBindImageMemory(VulkanManager::GetVulkanManager().GetDevice(), image, imageMemory, 0);
+	vkBindImageMemory(m_device, image, imageMemory, 0);
 }
 
 VkImageView VulkanManager::CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels)
@@ -532,7 +466,7 @@ void VulkanManager::CreateTextureSampler(VkSampler& sampler, float maxLod)
 // Samplers will apply filtering and transformations.
 
 	VkPhysicalDeviceProperties properties{};
-	vkGetPhysicalDeviceProperties(VulkanManager::GetVulkanManager().GetPhysicalDevice(), &properties);
+	vkGetPhysicalDeviceProperties(m_physicalDevice, &properties);
 
 	VkSamplerCreateInfo samplerInfo{};
 	{
@@ -580,7 +514,7 @@ void VulkanManager::CreateTextureSampler(VkSampler& sampler, float maxLod)
 
 	// The sampler is distinct from the image. The sampler is a way to get data from a texture so we don't need to ref the image here.
 	// This is different than other APIs which requires referring to the actual image.
-	VK_ASSERT(vkCreateSampler(VulkanManager::GetVulkanManager().GetDevice(), &samplerInfo, nullptr, &sampler), "Couldn't create texture sampler");
+	VK_ASSERT(vkCreateSampler(m_device, &samplerInfo, nullptr, &sampler), "Couldn't create texture sampler");
 }
 
 void VulkanManager::GenerateMipMaps(VkCommandPool& commandPool, VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels)
@@ -1064,9 +998,9 @@ void VulkanManager::EndSingleTimeCommands(VkCommandBuffer commandBuffer, VkComma
 	VK_ASSERT(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE), "Failed to submit queue");
 
 	// Wait for the transfer to finish.
-	VK_ASSERT(vkQueueWaitIdle(VulkanManager::GetVulkanManager().GetGraphicsQueue()), "Failed to wait");
+	VK_ASSERT(vkQueueWaitIdle(m_graphicsQueue), "Failed to wait");
 
-	vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), commandPool, 1, &commandBuffer);
+	vkFreeCommandBuffers(m_device, commandPool, 1, &commandBuffer);
 }
 
 void VulkanManager::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,

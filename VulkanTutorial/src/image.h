@@ -47,6 +47,13 @@ public:
 	{
 		m_view = VulkanManager::GetVulkanManager().CreateImageView(m_image, format, aspect, mipLevels);
 	}
+
+	void Cleanup()
+	{
+		vkDestroyImageView(VulkanManager::GetVulkanManager().GetDevice(), m_view, nullptr);
+		vkDestroyImage(VulkanManager::GetVulkanManager().GetDevice(), m_image, nullptr);
+		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_memory, nullptr);
+	}
 	
 	VkImage m_image;
 	VkDeviceMemory m_memory;
