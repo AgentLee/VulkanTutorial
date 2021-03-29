@@ -12,8 +12,9 @@ public:
 	~VulkanBase() = default;
 	
 	virtual void Initialize() = 0;
+	virtual void Reinitialize() = 0;
 	virtual void SubmitDrawCall(uint32_t imageIndex) = 0;
-	virtual void Cleanup() = 0;
+	virtual void Cleanup(bool recreateSwapchain) = 0;
 
 	virtual void CreateRenderPass() = 0;
 	virtual void CreateGraphicsPipeline() = 0;

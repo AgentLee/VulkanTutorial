@@ -91,11 +91,6 @@ public:
 	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkCommandPool& commandPool, VkDeviceSize size);
 	void CopyBufferToImage(VkCommandPool& commandPool, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 
-	// TODO: template this
-	void CreateVertexBufer(std::vector<Vertex>& vertices, VkBuffer& buffer, VkDeviceMemory& memory, VkCommandPool& commandPool);
-	void CreateIndexBuffer(std::vector<uint32_t>& indices, VkBuffer& buffer, VkDeviceMemory& memory, VkCommandPool& commandPool);
-	void CreateUniformBuffer(std::vector<VkBuffer>& buffers, std::vector<VkDeviceMemory>& memory);
-
 	// Should these be const?
 	VkInstance& GetInstance() { return m_instance; }
 	VkSurfaceKHR& GetSurface() { return m_surface; }

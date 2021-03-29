@@ -182,32 +182,3 @@ namespace vkHelpers
 		return static_cast<uint32_t>(mipLevels + 1);
 	}
 }
-
-class Buffer
-{
-public:
-	Buffer() {}
-	Buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) : m_size(size)
-	{
-		CreateBuffer(size, usage, properties);
-	}
-
-	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties)
-	{
-		VulkanManager::GetVulkanManager().CreateBuffer(size, usage, properties, m_buffer, m_memory);
-	}
-
-	template<typename T>
-	void Map(VkDevice& device, T* copyData)
-	{
-		void* data;
-		//VK_ASSERT(vkMapMemory(VulkanManager::GetVulkanManager().GetDevice(), m_memory, 0, m_size, 0, &data), "Failed to map buffer");
-		vkMapMemory(device, m_memory, 0, m_size, 0, &data);
-		memcpy(data, copyData, static_cast<size_t>(m_size));
-		vkUnmapMemory(device, m_memory);
-	}
-
-	VkDeviceSize m_size;
-	VkBuffer m_buffer;
-	VkDeviceMemory m_memory;
-};

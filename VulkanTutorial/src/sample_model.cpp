@@ -2,17 +2,115 @@
 
 #include <array>
 
+#include "buffer.h"
 #include "helpers.h"
 #include "constants.h"
 #include "texture.h"
+#include "vertex.h"
 
 void SampleModel::Initialize()
 {
+	CreateRenderPass();
+	CreateDescriptorSetLayout();
+	CreateGraphicsPipeline();
+	CreateCommandPool();
+	
+	// Create multisampled color buffer
+	{
+		VkFormat colorFormat = VulkanManager::GetVulkanManager().GetSwapChainImageFormat();
+
+		m_colorImage.CreateImage(
+			VulkanManager::GetVulkanManager().GetSwapChainExtent().width,
+			VulkanManager::GetVulkanManager().GetSwapChainExtent().height,
+			1,
+			VulkanManager::GetVulkanManager().GetMSAASamples(),
+			colorFormat,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+		m_colorImage.CreateView(colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+	}
+	
+	// Create depth buffer
+	{
+		VkFormat depthFormat = FindDepthFormat();
+
+		m_depthImage.CreateImage(
+			VulkanManager::GetVulkanManager().GetSwapChainExtent().width,
+			VulkanManager::GetVulkanManager().GetSwapChainExtent().height,
+			1,
+			VulkanManager::GetVulkanManager().GetMSAASamples(),
+			depthFormat,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+		m_depthImage.CreateView(depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+
+		VulkanManager::GetVulkanManager().TransitionImageLayout(m_commandPool, m_depthImage.m_image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
+	}
+	
+	CreateFrameBuffers();
 	CreateTextureImage();
 	CreateTextureImageView();
 	CreateTextureSampler();
 
-	//m_mesh = Mesh(MODEL_PATH.c_str());
+	m_mesh.LoadModel(MODEL_PATH.c_str());
+
+	CreateBuffers();
+	CreateUniformBuffers();
+	CreateDescriptorPool();
+	CreateDescriptorSet();
+	CreateCommandBuffers();
+}
+
+void SampleModel::Reinitialize()
+{
+	CreateRenderPass();
+	CreateGraphicsPipeline();
+	
+	// Create multisampled color buffer
+	{
+		VkFormat colorFormat = VulkanManager::GetVulkanManager().GetSwapChainImageFormat();
+
+		m_colorImage.CreateImage(
+			VulkanManager::GetVulkanManager().GetSwapChainExtent().width,
+			VulkanManager::GetVulkanManager().GetSwapChainExtent().height,
+			1,
+			VulkanManager::GetVulkanManager().GetMSAASamples(),
+			colorFormat,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+		m_colorImage.CreateView(colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+	}
+
+	// Create depth buffer
+	{
+		VkFormat depthFormat = FindDepthFormat();
+
+		m_depthImage.CreateImage(
+			VulkanManager::GetVulkanManager().GetSwapChainExtent().width,
+			VulkanManager::GetVulkanManager().GetSwapChainExtent().height,
+			1,
+			VulkanManager::GetVulkanManager().GetMSAASamples(),
+			depthFormat,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+		m_depthImage.CreateView(depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
+
+		VulkanManager::GetVulkanManager().TransitionImageLayout(m_commandPool, m_depthImage.m_image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
+	}
+
+	CreateFrameBuffers();
+	CreateUniformBuffers();
+	CreateDescriptorPool();
+	CreateDescriptorSet();
+	CreateCommandBuffers();
 }
 
 void SampleModel::SubmitDrawCall(uint32_t imageIndex)
@@ -20,24 +118,54 @@ void SampleModel::SubmitDrawCall(uint32_t imageIndex)
 	UpdateUniformBuffers(imageIndex);
 }
 
-void SampleModel::Cleanup()
+void SampleModel::Cleanup(bool recreateSwapchain = false)
 {
-	// Cleanup swapchain
+	if (recreateSwapchain)
 	{
+		vkDestroyImageView(VulkanManager::GetVulkanManager().GetDevice(), m_colorImage.m_view, nullptr);
+		vkDestroyImage(VulkanManager::GetVulkanManager().GetDevice(), m_colorImage.m_image, nullptr);
+		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_colorImage.m_memory, nullptr);
+
+		vkDestroyImageView(VulkanManager::GetVulkanManager().GetDevice(), m_depthImage.m_view, nullptr);
+		vkDestroyImage(VulkanManager::GetVulkanManager().GetDevice(), m_depthImage.m_image, nullptr);
+		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_depthImage.m_memory, nullptr);
+
+		for (auto& framebuffer : m_frameBuffers)
+		{
+			vkDestroyFramebuffer(VulkanManager::GetVulkanManager().GetDevice(), framebuffer, nullptr);
+		}
+
+		vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
+
 		vkDestroyPipeline(VulkanManager::GetVulkanManager().GetDevice(), m_graphicsPipeline, nullptr);
 		vkDestroyPipelineLayout(VulkanManager::GetVulkanManager().GetDevice(), m_pipelineLayout, nullptr);
-		vkDestroyRenderPass(VulkanManager::GetVulkanManager().GetDevice(), m_renderPass, nullptr);
+		vkDestroyRenderPass(VulkanManager::GetVulkanManager().GetDevice(), GetRenderPass(), nullptr);
 
 		for (size_t i = 0; i < VulkanManager::GetVulkanManager().GetSwapChainImages().size(); ++i)
 		{
-			vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), m_uniformBuffers[i], nullptr);
-			vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_uniformBuffersMemory[i], nullptr);
+			vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), m_uniformBuffers[i].m_buffer, nullptr);
+			vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_uniformBuffers[i].m_memory, nullptr);
 		}
 
 		vkDestroyDescriptorPool(VulkanManager::GetVulkanManager().GetDevice(), m_descriptorPool, nullptr);
 	}
-	
-	// Cleanup the rest
+	else
+	{
+		vkDestroySampler(VulkanManager::GetVulkanManager().GetDevice(), m_textureSampler, nullptr);
+		vkDestroyImageView(VulkanManager::GetVulkanManager().GetDevice(), m_textureImageView, nullptr);
+		vkDestroyImage(VulkanManager::GetVulkanManager().GetDevice(), m_textureImage, nullptr);
+		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_textureImageMemory, nullptr);
+
+		vkDestroyDescriptorSetLayout(VulkanManager::GetVulkanManager().GetDevice(), m_descriptorSetLayout, nullptr);
+
+		vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), m_vertexBuffer.m_buffer, nullptr);
+		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_vertexBuffer.m_memory, nullptr);
+
+		vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), m_indexBuffer.m_buffer, nullptr);
+		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_indexBuffer.m_memory, nullptr);
+
+		vkDestroyCommandPool(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool, nullptr);
+	}
 }
 
 void SampleModel::CreateRenderPass()
@@ -447,7 +575,7 @@ void SampleModel::CreateDescriptorSet()
 		// Specify which buffer we want the descriptor to refer to.
 		VkDescriptorBufferInfo bufferInfo{};
 		{
-			bufferInfo.buffer = m_uniformBuffers[i];
+			bufferInfo.buffer = m_uniformBuffers[i].m_buffer;
 			bufferInfo.offset = 0;
 			bufferInfo.range = sizeof(UniformBufferObject);
 		}
@@ -519,14 +647,45 @@ void SampleModel::CreateCommandPool()
 
 void SampleModel::CreateFrameBuffers()
 {
-	
+	// Each FBO will need to reference each of the image view objects.
+
+	m_frameBuffers.resize(VulkanManager::GetVulkanManager().GetSwapChainImageViews().size());
+
+	// Iterate over all of the views to Get a frame buffer for them.
+	for (auto i = 0; i < VulkanManager::GetVulkanManager().GetSwapChainImageViews().size(); ++i)
+	{
+		std::array<VkImageView, 3> attachments = {
+			m_colorImage.m_view,
+			m_depthImage.m_view,
+			VulkanManager::GetVulkanManager().GetSwapChainImageViews()[i],
+		};
+
+		// Frame buffers can only be used with compatible render passes.
+		// They roughly have the same attachments.
+
+		VkFramebufferCreateInfo frameBufferInfo{};
+		{
+			frameBufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			frameBufferInfo.renderPass = m_renderPass;
+			frameBufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+			frameBufferInfo.pAttachments = attachments.data();
+			frameBufferInfo.width = VulkanManager::GetVulkanManager().GetSwapChainExtent().width;
+			frameBufferInfo.height = VulkanManager::GetVulkanManager().GetSwapChainExtent().height;
+			frameBufferInfo.layers = 1;
+		}
+
+		VK_ASSERT(vkCreateFramebuffer(VulkanManager::GetVulkanManager().GetDevice(), &frameBufferInfo, nullptr, &m_frameBuffers[i]), "Failed to create frame buffer");
+	}
 }
 
 void SampleModel::CreateCommandBuffers()
 {
 	auto& vkManager = VulkanManager::GetVulkanManager();
 	
-	m_commandBuffers.resize(vkManager.GetSwapChainFrameBuffers().size());
+	// We need to allocate command buffers to be able write commands.
+	// Each image in the swap chain needs to have a command buffer written to.
+
+	m_commandBuffers.resize(m_frameBuffers.size());
 
 	std::array<VkClearValue, 2> clearValues{};
 	{
@@ -544,9 +703,61 @@ void SampleModel::CreateCommandBuffers()
 		VK_ASSERT(vkAllocateCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), &allocInfo, m_commandBuffers.data()), "Failed to allocate command buffers");
 	}
 
+	// Starting command buffer recording
 	for (auto i = 0; i < m_commandBuffers.size(); ++i)
 	{
-		// TODO finish
+		// Describe how the command buffers are being used.
+		VkCommandBufferBeginInfo beginInfo{};
+		{
+			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+			beginInfo.flags = 0;	// How to use command buffer.
+			beginInfo.pInheritanceInfo = nullptr;	// Only relevant for secondary command buffers - which state to inherit from primary buffer.
+		}
+
+		VK_ASSERT(vkBeginCommandBuffer(m_commandBuffers[i], &beginInfo), "Failed to begin recording command buffer");
+
+		// Starting a render pass
+		VkRenderPassBeginInfo renderPassInfo{};
+		{
+			renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+			renderPassInfo.renderPass = m_renderPass;
+			renderPassInfo.framebuffer = m_frameBuffers[i];
+			renderPassInfo.renderArea.offset = { 0, 0 };
+			renderPassInfo.renderArea.extent = VulkanManager::GetVulkanManager().GetSwapChainExtent();
+
+			renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+			renderPassInfo.pClearValues = clearValues.data();
+		}
+
+		vkCmdBeginRenderPass(m_commandBuffers[i],
+			&renderPassInfo,
+			VK_SUBPASS_CONTENTS_INLINE	// Details the render pass - It's a primary command buffer, everything will be sent in one go.
+		);
+
+		// Basic drawing
+		vkCmdBindPipeline(m_commandBuffers[i],
+			VK_PIPELINE_BIND_POINT_GRAPHICS,	// Graphics or compute pipeline	
+			m_graphicsPipeline
+		);
+
+		// Bind vertex buffer
+		VkBuffer vertexBuffers[] = { m_vertexBuffer.m_buffer };
+		VkDeviceSize offsets[] = { 0 };
+		vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
+
+		// Bind index buffer
+		vkCmdBindIndexBuffer(m_commandBuffers[i], m_indexBuffer.m_buffer, 0, VK_INDEX_TYPE_UINT32);
+
+		// Bind descriptor sets
+		vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
+
+		// Draw
+		vkCmdDrawIndexed(m_commandBuffers[i], static_cast<uint32_t>(m_mesh.m_indices.size()), 1, 0, 0, 0);
+
+		// End render pass
+		vkCmdEndRenderPass(m_commandBuffers[i]);
+
+		VK_ASSERT(vkEndCommandBuffer(m_commandBuffers[i]), "Failed to record command buffer");
 	}
 }
 
@@ -561,7 +772,7 @@ void SampleModel::CreateTextureImage()
 	Buffer stagingBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 	// Map to temp buffer
-	stagingBuffer.Map(VulkanManager::GetVulkanManager().GetDevice(), texture.m_pixels);
+	stagingBuffer.Map(texture.m_pixels);
 
 	texture.Free();
 
@@ -613,8 +824,5 @@ void SampleModel::UpdateUniformBuffers(uint32_t currentImage)
 		ubo.proj[1][1] *= -1.0f;
 	}
 
-	void* data;
-	VK_ASSERT(vkMapMemory(VulkanManager::GetVulkanManager().GetDevice(), m_uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data), "Couldn't map uniform buffer");
-	memcpy(data, &ubo, sizeof(ubo));
-	vkUnmapMemory(VulkanManager::GetVulkanManager().GetDevice(), m_uniformBuffersMemory[currentImage]);
+	m_uniformBuffers[currentImage].Map(m_uniformBuffers[currentImage].m_memory, &ubo, sizeof(ubo));
 }

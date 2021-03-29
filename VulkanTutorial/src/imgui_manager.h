@@ -12,8 +12,9 @@ class ImGuiManager : public VulkanBase
 {
 public:
 	void Initialize() override;
+	void Reinitialize() override;
 	void SubmitDrawCall(uint32_t imageIndex) override;
-	void Cleanup() override;
+	void Cleanup(bool recreateSwapchain) override;
 
 	void CreateRenderPass() override;
 	void CreateGraphicsPipeline() override {}
