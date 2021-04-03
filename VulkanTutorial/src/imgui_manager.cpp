@@ -7,7 +7,24 @@
 
 void ImGuiManager::Initialize()
 {
-	
+	CreateRenderPass();
+	CreateDescriptorSetLayout();
+	CreateGraphicsPipeline();
+	CreateCommandPool();
+	CreateFrameBuffers();
+	CreateDescriptorPool();
+	CreateDescriptorSet();
+	CreateCommandBuffers();
+}
+
+void ImGuiManager::Reinitialize()
+{
+	CreateRenderPass();
+	CreateGraphicsPipeline();
+	CreateFrameBuffers();
+	CreateDescriptorPool();
+	CreateDescriptorSet();
+	CreateCommandBuffers();
 }
 
 void ImGuiManager::SubmitDrawCall(uint32_t imageIndex)
@@ -48,7 +65,7 @@ void ImGuiManager::SubmitDrawCall(uint32_t imageIndex)
 	VK_ASSERT(vkEndCommandBuffer(m_commandBuffers[imageIndex]), "");
 }
 
-void ImGuiManager::Cleanup()
+void ImGuiManager::Cleanup(bool recreateSwapchain = false)
 {
 	for (auto& framebuffer : m_frameBuffers) {
 		vkDestroyFramebuffer(VulkanManager::GetVulkanManager().GetDevice(), framebuffer, nullptr);
@@ -169,6 +186,7 @@ void ImGuiManager::CreateCommandPool()
 
 void ImGuiManager::CreateFrameBuffers()
 {
+	// Each FBO will need to reference each of the image view objects.
 	m_frameBuffers.resize(VulkanManager::GetVulkanManager().GetSwapChainImageViews().size());
 	
 	VkImageView attachment[1];

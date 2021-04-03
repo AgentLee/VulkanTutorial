@@ -9,6 +9,8 @@
 
 #include <vector>
 
+#include "vertex.h"
+
 struct QueueFamilyIndices
 {
 	std::optional<uint32_t> graphicsFamily;
@@ -53,7 +55,18 @@ public:
 	void CreateLogicalDevice();
 	void CreateSwapChain();
 	void RecreateSwapChain();
+	void CleanupSwapChain();
+
+	// I think these make more sense in helper...
+	void CreateImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiliing, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+	void CreateTextureImage(const char* path);
 	VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
+	void TransitionImageLayout(VkCommandPool& commandPool, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
+	void CreateTextureSampler(VkSampler& sampler, float maxLod);
+
+	// TODO: This should be a helper function.
+	void GenerateMipMaps(VkCommandPool& commandPool, VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels);
+	
 	void CreateImageViews();
 	void CreateSyncObjects();
 	
@@ -69,6 +82,15 @@ public:
 	VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
 	VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
 	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
+
+	uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+	
+	VkCommandBuffer BeginSingleTimeCommands(VkCommandPool& commandPool);
+	void EndSingleTimeCommands(VkCommandBuffer commandBuffer, VkCommandPool& commandPool);
+
+	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& memory);
+	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkCommandPool& commandPool, VkDeviceSize size);
+	void CopyBufferToImage(VkCommandPool& commandPool, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 	
 	// Should these be const?
 	VkInstance& GetInstance() { return m_instance; }

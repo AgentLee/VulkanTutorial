@@ -142,3 +142,43 @@ static VkFormat FindDepthFormat()
 		VK_IMAGE_TILING_OPTIMAL,
 		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
 }
+
+namespace vkHelpers
+{
+	static VkShaderModule CreateShaderModule(const std::vector<char>& code)
+	{
+		// Wraps the code in a VkShaderModule object.
+
+		VkShaderModuleCreateInfo createInfo{};
+		{
+			createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+			createInfo.codeSize = code.size();
+			createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+		}
+
+		VkShaderModule shaderModule;
+		if (vkCreateShaderModule(VulkanManager::GetVulkanManager().GetDevice(), &createInfo, nullptr, &shaderModule))
+		{
+			throw std::runtime_error("Failed to create shader module");
+		}
+
+		return shaderModule;
+	}
+
+	static bool HasStencilComponent(VkFormat format)
+	{
+		return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
+	}
+
+	static uint32_t CaclulateMipLevels(int width, int height)
+	{
+		// Find largest dimension
+		auto maxDimension = std::max(width, height);
+		// Determine how many times the dimension can be divided by 2
+		auto divisibleBy2 = std::log2(maxDimension);
+		// Make sure result is a power of 2
+		auto mipLevels = std::floor(divisibleBy2);
+		// Add 1 so the original image has a mip level
+		return static_cast<uint32_t>(mipLevels + 1);
+	}
+}
