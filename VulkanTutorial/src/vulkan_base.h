@@ -3,6 +3,8 @@
 #include "vulkan_manager.h"
 #include "vulkan_helper.h"
 
+#include "camera.h"
+
 #include <vector>
 
 class VulkanBase
@@ -13,7 +15,7 @@ public:
 	
 	virtual void Initialize() = 0;
 	virtual void Reinitialize() = 0;
-	virtual void SubmitDrawCall(uint32_t imageIndex) = 0;
+	virtual void SubmitDrawCall(uint32_t imageIndex, Camera& camera) = 0;
 	virtual void Cleanup(bool recreateSwapchain) = 0;
 
 	virtual void CreateRenderPass() = 0;

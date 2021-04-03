@@ -27,13 +27,22 @@ void ImGuiManager::Reinitialize()
 	CreateCommandBuffers();
 }
 
-void ImGuiManager::SubmitDrawCall(uint32_t imageIndex)
+void ImGuiManager::SubmitDrawCall(uint32_t imageIndex, Camera& camera)
 {
 	// Start the Dear ImGui frame
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
-	ImGui::ShowDemoWindow();
+	//ImGui::ShowDemoWindow();
+
+	ImGui::Begin("Debug Panel");
+
+	{
+		ImGui::InputFloat("Camera speed", &camera.m_speed, 0, 0.05f);
+	}
+	
+	ImGui::End();
+	
 	ImGui::Render();
 	
 	// Submit ImGui commands

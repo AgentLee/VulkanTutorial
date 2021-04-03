@@ -18,8 +18,10 @@
 #include <iostream>
 #include <stdexcept>
 #include <cstdlib>
+#include <map>
 #include <vector>
 #include <optional>
+#include <queue>
 
 
 #include "constants.h"
@@ -27,6 +29,10 @@
 #include "debug_layer.h"
 #include "vertex.h"
 #include "buffer.h"
+
+#include "camera.h"
+#include "input_manager.h"
+#include "window.h"
 
 class HelloTriangle
 {
@@ -36,6 +42,8 @@ public:
 	// This needs to be static because GLFW doesn't know how to call it from a this pointer.
 	static void FrameBufferResizeCallback(GLFWwindow* window, int width, int height);
 
+	Camera& GetCamera() { return *g_camera; }
+	
 private:
 	void InitWindow();
 	void InitImGui();
@@ -48,12 +56,21 @@ private:
 	// These should be in VulkanManager
 	void RecreateSwapChain();
 	void CleanupSwapChain();
+
+	void mouse_callback(GLFWwindow* window, double xpos, double ypos)
+	{
+		//HelloTriangle::GetInstance().Camera()
+	}
 	
 private:
 	ImGuiManager m_imguiManager;
 	SampleModel m_sampleModel;
+
+	Camera* g_camera;
 	
 	GLFWwindow* m_window;
 	size_t m_currentFrame = 0;
 	bool frameBufferResized = false;
+
+	Window window;
 };

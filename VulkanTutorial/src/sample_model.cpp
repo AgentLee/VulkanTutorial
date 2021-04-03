@@ -57,7 +57,8 @@ void SampleModel::Initialize()
 	CreateTextureSampler();
 
 	m_mesh.LoadModel(MODEL_PATH.c_str());
-
+	m_transform = Transform(glm::vec3(0));
+	
 	CreateBuffers();
 	CreateUniformBuffers();
 	CreateDescriptorPool();
@@ -113,9 +114,9 @@ void SampleModel::Reinitialize()
 	CreateCommandBuffers();
 }
 
-void SampleModel::SubmitDrawCall(uint32_t imageIndex)
+void SampleModel::SubmitDrawCall(uint32_t imageIndex, Camera& camera)
 {
-	UpdateUniformBuffers(imageIndex);
+	UpdateUniformBuffers(imageIndex, camera);
 }
 
 void SampleModel::Cleanup(bool recreateSwapchain = false)
@@ -147,9 +148,9 @@ void SampleModel::Cleanup(bool recreateSwapchain = false)
 	else
 	{
 		vkDestroySampler(VulkanManager::GetVulkanManager().GetDevice(), m_textureSampler, nullptr);
-		vkDestroyImageView(VulkanManager::GetVulkanManager().GetDevice(), m_textureImageView, nullptr);
-		vkDestroyImage(VulkanManager::GetVulkanManager().GetDevice(), m_textureImage, nullptr);
-		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_textureImageMemory, nullptr);
+		vkDestroyImageView(VulkanManager::GetVulkanManager().GetDevice(), m_texture.m_view, nullptr);
+		vkDestroyImage(VulkanManager::GetVulkanManager().GetDevice(), m_texture.m_image, nullptr);
+		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_texture.m_memory, nullptr);
 
 		vkDestroyDescriptorSetLayout(VulkanManager::GetVulkanManager().GetDevice(), m_descriptorSetLayout, nullptr);
 
@@ -577,7 +578,7 @@ void SampleModel::CreateDescriptorSet()
 		VkDescriptorImageInfo imageInfo{};
 		{
 			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			imageInfo.imageView = m_textureImageView;
+			imageInfo.imageView = m_texture.m_view;
 			imageInfo.sampler = m_textureSampler;
 		}
 
@@ -781,22 +782,22 @@ void SampleModel::CreateTextureImage()
 		VK_IMAGE_TILING_OPTIMAL,
 		usage,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		m_textureImage, m_textureImageMemory);
+		m_texture.m_image, m_texture.m_memory);
 
 	// Copy the staging buffer to the image
-	VulkanManager::GetVulkanManager().TransitionImageLayout(m_commandPool, m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, m_mipLevels);
-	VulkanManager::GetVulkanManager().CopyBufferToImage(m_commandPool, stagingBuffer.m_buffer, m_textureImage, texture.width, texture.height);
+	VulkanManager::GetVulkanManager().TransitionImageLayout(m_commandPool, m_texture.m_image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, m_mipLevels);
+	VulkanManager::GetVulkanManager().CopyBufferToImage(m_commandPool, stagingBuffer.m_buffer, m_texture.m_image, texture.width, texture.height);
 
 	vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), stagingBuffer.m_buffer, nullptr);
 	vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBuffer.m_memory, nullptr);
 
 	// Generating mipmaps transitions the layout to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL.
-	VulkanManager::GetVulkanManager().GenerateMipMaps(m_commandPool, m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, texture.width, texture.height, m_mipLevels);
+	VulkanManager::GetVulkanManager().GenerateMipMaps(m_commandPool, m_texture.m_image, VK_FORMAT_R8G8B8A8_SRGB, texture.width, texture.height, m_mipLevels);
 }
 
 void SampleModel::CreateTextureImageView()
 {
-	m_textureImageView = VulkanManager::GetVulkanManager().CreateImageView(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, m_mipLevels);
+	m_texture.m_view = VulkanManager::GetVulkanManager().CreateImageView(m_texture.m_image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, m_mipLevels);
 }
 
 void SampleModel::CreateTextureSampler()
@@ -804,17 +805,16 @@ void SampleModel::CreateTextureSampler()
 	VulkanManager::GetVulkanManager().CreateTextureSampler(m_textureSampler, static_cast<float>(m_mipLevels));
 }
 
-void SampleModel::UpdateUniformBuffers(uint32_t currentImage)
+void SampleModel::UpdateUniformBuffers(uint32_t currentImage, Camera& camera)
 {
 	float time = GetCurrentTime();
 	time = 1.0f;
 
 	UniformBufferObject ubo{};
 	{
-		ubo.model = glm::rotate(glm::mat4(1), time * glm::radians(0.0f), glm::vec3(0, 0, 1));
-		ubo.view = glm::lookAt(glm::vec3(2, 2, 2), glm::vec3(0), glm::vec3(0, 0, 1));
-		ubo.proj = glm::perspective(glm::radians(45.0f), (float)VulkanManager::GetVulkanManager().GetSwapChainExtent().width / (float)VulkanManager::GetVulkanManager().GetSwapChainExtent().height, 0.1f, 10.0f);
-		ubo.proj[1][1] *= -1.0f;
+		ubo.model = m_transform.matrix;
+		ubo.view = camera.View();
+		ubo.proj = camera.Projection();
 	}
 
 	m_uniformBuffers[currentImage].Map(m_uniformBuffers[currentImage].m_memory, &ubo, sizeof(ubo));
