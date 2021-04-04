@@ -45,7 +45,6 @@ public:
 	
 private:
 	void InitWindow();
-	void InitImGui();
 	void MainLoop();
 	void DrawFrame();
 	void Cleanup();
@@ -55,11 +54,6 @@ private:
 	// These should be in VulkanManager
 	void RecreateSwapChain();
 	void CleanupSwapChain();
-
-	void mouse_callback(GLFWwindow* window, double xpos, double ypos)
-	{
-		//HelloTriangle::GetInstance().Camera()
-	}
 	
 private:
 	ImGuiManager m_imguiManager;

@@ -6,6 +6,8 @@
 
 #include <vector>
 
+
+#include "helpers.h"
 #include "vulkan_base.h"
 
 class ImGuiManager : public VulkanBase
@@ -24,4 +26,6 @@ public:
 	void CreateCommandPool() override;
 	void CreateFrameBuffers() override;
 	void CreateCommandBuffers() override {}
+
+	void SetupImGui(GLFWwindow* window, size_t currentFrame);
 };

@@ -214,3 +214,67 @@ void ImGuiManager::CreateFrameBuffers()
 		vkCreateFramebuffer(VulkanManager::GetVulkanManager().GetDevice(), &info, nullptr, &m_frameBuffers[i]);
 	}
 }
+
+void ImGuiManager::SetupImGui(GLFWwindow* window, size_t currentFrame)
+{
+	// Setup Dear ImGui context
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+
+	// Setup Dear ImGui style
+	ImGui::StyleColorsDark();
+	//ImGui::StyleColorsClassic();
+
+	// Setup Platform/Renderer bindings
+	ImGui_ImplGlfw_InitForVulkan(window, true);
+
+	auto queueFamily = VulkanManager::GetVulkanManager().FindQueueFamilies(VulkanManager::GetVulkanManager().GetPhysicalDevice());
+	auto swapChainSupport = VulkanManager::GetVulkanManager().QuerySwapChainSupport(VulkanManager::GetVulkanManager().GetPhysicalDevice());
+
+	ImGui_ImplVulkan_InitInfo init_info = {};
+	{
+		init_info.Instance = VulkanManager::GetVulkanManager().GetInstance();
+		init_info.PhysicalDevice = VulkanManager::GetVulkanManager().GetPhysicalDevice();
+		init_info.Device = VulkanManager::GetVulkanManager().GetDevice();
+		init_info.QueueFamily = queueFamily.graphicsFamily.value();
+		init_info.Queue = VulkanManager::GetVulkanManager().GetGraphicsQueue();
+		init_info.PipelineCache = nullptr;
+		init_info.DescriptorPool = GetDescriptorPool();
+		init_info.Allocator = nullptr;
+		init_info.MinImageCount = swapChainSupport.capabilities.minImageCount + 1;
+		init_info.ImageCount = VulkanManager::GetVulkanManager().NumSwapChainImages();
+		init_info.CheckVkResultFn = nullptr;
+	}
+	ImGui_ImplVulkan_Init(&init_info, GetRenderPass());
+
+	// Upload Fonts
+	{
+		// Use any command queue
+		VkCommandPool command_pool = GetCommandPool();
+		VK_ASSERT(vkResetCommandPool(VulkanManager::GetVulkanManager().GetDevice(), command_pool, 0), "");
+
+		VkCommandBuffer command_buffer = GetCommandBuffers()[currentFrame];
+
+		VkCommandBufferBeginInfo begin_info = {};
+		begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+		vkBeginCommandBuffer(command_buffer, &begin_info);
+
+		ImGui_ImplVulkan_CreateFontsTexture(command_buffer);
+
+		VkSubmitInfo end_info = {};
+		end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		end_info.commandBufferCount = 1;
+		end_info.pCommandBuffers = &command_buffer;
+		vkEndCommandBuffer(command_buffer);
+		vkQueueSubmit(VulkanManager::GetVulkanManager().GetGraphicsQueue(), 1, &end_info, VK_NULL_HANDLE);
+
+		vkDeviceWaitIdle(VulkanManager::GetVulkanManager().GetDevice());
+		ImGui_ImplVulkan_DestroyFontUploadObjects();
+	}
+
+	ImGui_ImplVulkan_DestroyFontUploadObjects();
+}
