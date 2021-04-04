@@ -3,6 +3,7 @@
 #include "buffer.h"
 #include "image.h"
 #include "mesh.h"
+#include "transform.h"
 #include "vulkan_base.h"
 
 class SampleModel : public VulkanBase
@@ -10,7 +11,7 @@ class SampleModel : public VulkanBase
 public:
 	void Initialize() override;
 	void Reinitialize() override;
-	void SubmitDrawCall(uint32_t imageIndex) override;
+	void SubmitDrawCall(uint32_t imageIndex, Camera&) override;
 	void Cleanup(bool recreateSwapchain) override;
 	
 	void CreateRenderPass() override;
@@ -26,8 +27,18 @@ public:
 	void CreateTextureImageView();
 	void CreateTextureSampler();
 	
-	void UpdateUniformBuffers(uint32_t currentImage);
+	void UpdateUniformBuffers(uint32_t currentImage, Camera& camera);
 
+	void Translate()
+	{
+		m_transform.Translate(glm::vec3(0.001, 0, 0));
+	}
+
+	void Rotate(glm::vec3 axis, float angle)
+	{
+		m_transform.Rotate(axis, angle);
+	}
+	
 	void CreateBuffers()
 	{
 		m_vertexBuffer = Buffer(m_mesh.m_vertices, m_commandPool, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
@@ -51,11 +62,8 @@ public:
 		}
 	}
 
-	VkImage m_textureImage;
-	VkDeviceMemory m_textureImageMemory;
-	VkImageView m_textureImageView;
+	Image m_texture;
 	VkSampler m_textureSampler;
-
 	uint32_t m_mipLevels;
 
 	// Buffers should be allocated in one go.
@@ -67,6 +75,8 @@ public:
 
 	Mesh m_mesh;
 
+	Transform m_transform;
+	
 	Image m_colorImage;
 	Image m_depthImage;
 };

@@ -6,9 +6,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-//#define TINYOBJLOADER_IMPLEMENTATION
-//#include <tiny_obj_loader.h>
-
 #include <map>
 #include <set>
 #include <cstdint>
@@ -19,6 +16,62 @@
 #include "../libs/imgui/imgui_impl_vulkan.h"
 
 #define IMGUI_ENABLED true
+
+//https://stackoverflow.com/questions/36579771/glfw-key-callback-synchronization
+//https://www.reddit.com/r/opengl/comments/bn6gbv/glfw_keyboard_input_handling/
+//https://stackoverflow.com/questions/7676971/pointing-to-a-function-that-is-a-class-member-glfw-setkeycallback
+//https://discourse.glfw.org/t/passing-parameters-to-callbacks/848/3
+//https://www.glfw.org/docs/3.3/input_guide.html
+struct KeyEvent
+{
+	KeyEvent(int key, int code, int action, int modifiers)
+	{
+		this->key = key;
+		this->code = code;
+		this->action = action;
+		this->modifiers = modifiers;
+	}
+	int key, code, action, modifiers;
+	std::chrono::steady_clock::time_point eventTime;
+};
+
+std::map<int, bool> g_keys;
+std::queue<KeyEvent> g_unhandledKeys;
+
+void HandleInput(HelloTriangle* app, float delta_time)
+{
+	//Anything that should happen "when the users presses the key" should happen here
+	while (!g_unhandledKeys.empty()) 
+	{
+		KeyEvent event = g_unhandledKeys.front();
+		g_unhandledKeys.pop();
+		g_keys[event.key] = event.action == GLFW_PRESS || event.action == GLFW_REPEAT;
+	}
+	//Anything that should happen "while the key is held down" should happen here.
+	float movement[2] = { 0,0 };
+	if (g_keys[GLFW_KEY_W])
+		app->GetCamera().Translate(Direction::Forward);
+	if (g_keys[GLFW_KEY_A])
+		app->GetCamera().Translate(Direction::Left);
+	if (g_keys[GLFW_KEY_S])
+		app->GetCamera().Translate(Direction::Backward);
+	if (g_keys[GLFW_KEY_D])
+		app->GetCamera().Translate(Direction::Right);
+	if (g_keys[GLFW_KEY_C])
+		app->GetCamera().Translate(Direction::Up);
+	if (g_keys[GLFW_KEY_SPACE])
+		app->GetCamera().Translate(Direction::Down);
+}
+
+void HandleKey(GLFWwindow* window, int key, int code, int actions, int modifiers)
+{
+	g_unhandledKeys.emplace(key, code, actions, modifiers);
+}
+
+void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+	HandleKey(window, key, scancode, action, mods);
+}
 
 void HelloTriangle::Run()
 {
@@ -33,6 +86,14 @@ void HelloTriangle::Run()
 	InitImGui();
 #endif
 
+	g_camera = new Camera(glm::vec3(2, 2, 2), 
+		glm::vec3(0,0,0), 
+		glm::vec3(0,0,1),	// hmm z is up
+		45.0f,
+		(float)VulkanManager::GetVulkanManager().GetSwapChainExtent().width / (float)VulkanManager::GetVulkanManager().GetSwapChainExtent().height,
+		0.1f, 
+		10.0f);
+	
 	MainLoop();
 
 	Cleanup();
@@ -96,12 +157,23 @@ void HelloTriangle::DrawFrame()
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 	VkSemaphore signalSemaphores[] = { VulkanManager::GetVulkanManager().GetRenderFinishedSemaphores()[m_currentFrame] };
 
+	{
+		float now = (float)glfwGetTime();
+		static float lastUpdate = now;
+		float deltaTime = now - lastUpdate;
+		lastUpdate = now;
+
+		HandleInput(this, deltaTime);
+	}
+
+	g_camera->Update();
+	
 	// Update uniforms
-	m_sampleModel.SubmitDrawCall(imageIndex);
+	m_sampleModel.SubmitDrawCall(imageIndex, *g_camera);
 
 #if IMGUI_ENABLED
 	// Submit ImGui commands
-	m_imguiManager.SubmitDrawCall(imageIndex);
+	m_imguiManager.SubmitDrawCall(imageIndex, *g_camera);
 #endif
 
 #if IMGUI_ENABLED
@@ -205,6 +277,8 @@ void HelloTriangle::InitWindow()
 	
 	// Detect resizing
 	glfwSetFramebufferSizeCallback(m_window, FrameBufferResizeCallback);
+
+	glfwSetKeyCallback(m_window, KeyCallback);
 }
 
 void HelloTriangle::InitImGui()
