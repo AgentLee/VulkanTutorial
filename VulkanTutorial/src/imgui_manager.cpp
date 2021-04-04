@@ -47,7 +47,7 @@ void ImGuiManager::SubmitDrawCall(uint32_t imageIndex, Camera& camera)
 	ImGui::Render();
 	
 	// Submit ImGui commands
-	VK_ASSERT(vkResetCommandPool(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool, 0), "");
+	VK_ASSERT(vkResetCommandPool(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool.m_commandPool, 0), "");
 
 	VkCommandBufferBeginInfo info = {};
 	{
@@ -81,10 +81,10 @@ void ImGuiManager::Cleanup(bool recreateSwapchain = false)
 		vkDestroyFramebuffer(VulkanManager::GetVulkanManager().GetDevice(), framebuffer, nullptr);
 	}
 
-	vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
+	vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool.m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
 
 	vkDestroyRenderPass(VulkanManager::GetVulkanManager().GetDevice(), m_renderPass, nullptr);
-	vkDestroyCommandPool(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool, nullptr);
+	m_commandPool.Destroy();
 	
 	// Resources to destroy when the program ends
 	ImGui_ImplVulkan_Shutdown();
@@ -186,12 +186,7 @@ void ImGuiManager::CreateCommandPool()
 	commandPoolCreateInfo.queueFamilyIndex = index.graphicsFamily.value();
 	commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-	if (vkCreateCommandPool(VulkanManager::GetVulkanManager().GetDevice(), &commandPoolCreateInfo, nullptr, &m_commandPool) != VK_SUCCESS) {
-		throw std::runtime_error("Could not create graphics command pool");
-	}
-
-	m_commandBuffers.resize(VulkanManager::GetVulkanManager().GetSwapChainImageViews().size());
-	VKCreateCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_commandBuffers.data(), static_cast<uint32_t>(m_commandBuffers.size()), m_commandPool);
+	m_commandPool.Create(&commandPoolCreateInfo);
 }
 
 void ImGuiManager::CreateFrameBuffers()
@@ -213,6 +208,13 @@ void ImGuiManager::CreateFrameBuffers()
 		attachment[0] = VulkanManager::GetVulkanManager().GetSwapChainImageViews()[i];
 		vkCreateFramebuffer(VulkanManager::GetVulkanManager().GetDevice(), &info, nullptr, &m_frameBuffers[i]);
 	}
+}
+
+void ImGuiManager::CreateCommandBuffers()
+{
+	auto vkManager = VulkanManager::GetVulkanManager();
+	m_commandBuffers.resize(vkManager.GetSwapChainImageViews().size());
+	VKCreateCommandBuffers(vkManager.GetDevice(), m_commandBuffers.data(), static_cast<uint32_t>(m_commandBuffers.size()), m_commandPool.m_commandPool);
 }
 
 void ImGuiManager::SetupImGui(GLFWwindow* window, size_t currentFrame)

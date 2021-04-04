@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vulkan_manager.h"
+#include "command_pool.h"
 #include "vulkan_helper.h"
 
 #include "camera.h"
@@ -32,7 +33,7 @@ public:
 	VkDescriptorSetLayout& GetDescriptorSetLayout() { return m_descriptorSetLayout; }
 	std::vector<VkDescriptorSet>& GetDescriptorSets() { return  m_descriptorSets; }
 	VkRenderPass& GetRenderPass() { return m_renderPass; }
-	VkCommandPool& GetCommandPool() { return m_commandPool; }
+	VkCommandPool& GetCommandPool() { return m_commandPool.m_commandPool; }
 	std::vector<VkCommandBuffer>& GetCommandBuffers() { return m_commandBuffers; }
 	std::vector<VkFramebuffer>& GetFrameBuffers() { return m_frameBuffers; }
 
@@ -48,7 +49,8 @@ public:
 	
 	// This should be outside in Renderer
 	VkRenderPass m_renderPass;
-	VkCommandPool m_commandPool;
+	//VkCommandPool m_commandPool;
+	CommandPool m_commandPool;
 	std::vector<VkCommandBuffer> m_commandBuffers;
 	std::vector<VkFramebuffer> m_frameBuffers;
 };

@@ -48,7 +48,7 @@ void SampleModel::Initialize()
 
 		m_depthImage.CreateView(depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 
-		VulkanManager::GetVulkanManager().TransitionImageLayout(m_commandPool, m_depthImage.m_image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
+		VulkanManager::GetVulkanManager().TransitionImageLayout(m_commandPool.m_commandPool, m_depthImage.m_image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
 	}
 	
 	CreateFrameBuffers();
@@ -104,7 +104,7 @@ void SampleModel::Reinitialize()
 
 		m_depthImage.CreateView(depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 
-		VulkanManager::GetVulkanManager().TransitionImageLayout(m_commandPool, m_depthImage.m_image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
+		VulkanManager::GetVulkanManager().TransitionImageLayout(m_commandPool.m_commandPool, m_depthImage.m_image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
 	}
 
 	CreateFrameBuffers();
@@ -131,7 +131,7 @@ void SampleModel::Cleanup(bool recreateSwapchain = false)
 			vkDestroyFramebuffer(VulkanManager::GetVulkanManager().GetDevice(), framebuffer, nullptr);
 		}
 
-		vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
+		vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool.m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
 
 		vkDestroyPipeline(VulkanManager::GetVulkanManager().GetDevice(), m_graphicsPipeline, nullptr);
 		vkDestroyPipelineLayout(VulkanManager::GetVulkanManager().GetDevice(), m_pipelineLayout, nullptr);
@@ -160,7 +160,7 @@ void SampleModel::Cleanup(bool recreateSwapchain = false)
 		vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), m_indexBuffer.m_buffer, nullptr);
 		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_indexBuffer.m_memory, nullptr);
 
-		vkDestroyCommandPool(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool, nullptr);
+		m_commandPool.Destroy();
 	}
 }
 
@@ -636,7 +636,7 @@ void SampleModel::CreateCommandPool()
 		poolInfo.flags = 0;
 	}
 
-	VK_ASSERT(vkCreateCommandPool(VulkanManager::GetVulkanManager().GetDevice(), &poolInfo, nullptr, &m_commandPool), "Failed to create command pool");
+	m_commandPool.Create(&poolInfo);
 }
 
 void SampleModel::CreateFrameBuffers()
@@ -690,7 +690,7 @@ void SampleModel::CreateCommandBuffers()
 	VkCommandBufferAllocateInfo allocInfo{};
 	{
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		allocInfo.commandPool = m_commandPool;
+		allocInfo.commandPool = m_commandPool.m_commandPool;
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;	// Submit to queue for execution but cannot be called from other command buffers (secondary).
 		allocInfo.commandBufferCount = (uint32_t)m_commandBuffers.size();
 
@@ -785,14 +785,14 @@ void SampleModel::CreateTextureImage()
 		m_texture.m_image, m_texture.m_memory);
 
 	// Copy the staging buffer to the image
-	VulkanManager::GetVulkanManager().TransitionImageLayout(m_commandPool, m_texture.m_image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, m_mipLevels);
-	VulkanManager::GetVulkanManager().CopyBufferToImage(m_commandPool, stagingBuffer.m_buffer, m_texture.m_image, texture.width, texture.height);
+	VulkanManager::GetVulkanManager().TransitionImageLayout(m_commandPool.m_commandPool, m_texture.m_image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, m_mipLevels);
+	VulkanManager::GetVulkanManager().CopyBufferToImage(m_commandPool.m_commandPool, stagingBuffer.m_buffer, m_texture.m_image, texture.width, texture.height);
 
 	vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), stagingBuffer.m_buffer, nullptr);
 	vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBuffer.m_memory, nullptr);
 
 	// Generating mipmaps transitions the layout to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL.
-	VulkanManager::GetVulkanManager().GenerateMipMaps(m_commandPool, m_texture.m_image, VK_FORMAT_R8G8B8A8_SRGB, texture.width, texture.height, m_mipLevels);
+	VulkanManager::GetVulkanManager().GenerateMipMaps(m_commandPool.m_commandPool, m_texture.m_image, VK_FORMAT_R8G8B8A8_SRGB, texture.width, texture.height, m_mipLevels);
 }
 
 void SampleModel::CreateTextureImageView()

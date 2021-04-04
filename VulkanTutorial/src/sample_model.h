@@ -41,8 +41,8 @@ public:
 	
 	void CreateBuffers()
 	{
-		m_vertexBuffer = Buffer(m_mesh.m_vertices, m_commandPool, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-		m_indexBuffer = Buffer(m_mesh.m_indices, m_commandPool, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+		m_vertexBuffer = Buffer(m_mesh.m_vertices, m_commandPool.m_commandPool, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+		m_indexBuffer = Buffer(m_mesh.m_indices, m_commandPool.m_commandPool, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 	}
 
 	void CreateUniformBuffers()

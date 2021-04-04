@@ -25,7 +25,7 @@ public:
 	void CreateDescriptorPool() override;
 	void CreateCommandPool() override;
 	void CreateFrameBuffers() override;
-	void CreateCommandBuffers() override {}
+	void CreateCommandBuffers() override;
 
 	void SetupImGui(GLFWwindow* window, size_t currentFrame);
 };
