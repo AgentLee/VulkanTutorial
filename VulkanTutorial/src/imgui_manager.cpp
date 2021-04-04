@@ -21,6 +21,7 @@ void ImGuiManager::Reinitialize()
 {
 	CreateRenderPass();
 	CreateGraphicsPipeline();
+	CreateCommandPool();
 	CreateFrameBuffers();
 	CreateDescriptorPool();
 	CreateDescriptorSet();

@@ -3,7 +3,6 @@
 int main()
 {
 	HelloTriangle app;
-	//app.CreateInstance();
 
 	std::cout << "Revving up the N-Gin.." << std::endl;
 	

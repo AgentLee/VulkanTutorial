@@ -32,7 +32,6 @@
 
 #include "camera.h"
 #include "input_manager.h"
-#include "window.h"
 
 class HelloTriangle
 {
@@ -71,6 +70,4 @@ private:
 	GLFWwindow* m_window;
 	size_t m_currentFrame = 0;
 	bool frameBufferResized = false;
-
-	Window window;
 };

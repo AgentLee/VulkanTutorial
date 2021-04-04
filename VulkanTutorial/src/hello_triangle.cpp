@@ -38,20 +38,14 @@ struct KeyEvent
 std::map<int, bool> g_keys;
 std::queue<KeyEvent> g_unhandledKeys;
 
-float external_position[2];
-std::map<int, std::function<void(/*args*/)>> key_functions;
-void handle_input(HelloTriangle* app, float delta_time) {
+void HandleInput(HelloTriangle* app, float delta_time)
+{
 	//Anything that should happen "when the users presses the key" should happen here
-	while (!g_unhandledKeys.empty()) {
+	while (!g_unhandledKeys.empty()) 
+	{
 		KeyEvent event = g_unhandledKeys.front();
 		g_unhandledKeys.pop();
-		//key_functions[event.key](/*args*/);
-		//if(key_functions.find(event.key) == key_functions.end())
-		//{
-		//	key_functions.insert(event.key
-		//}
-		bool pressed = event.action == GLFW_PRESS || event.action == GLFW_REPEAT;
-		g_keys[event.key] = pressed;
+		g_keys[event.key] = event.action == GLFW_PRESS || event.action == GLFW_REPEAT;
 	}
 	//Anything that should happen "while the key is held down" should happen here.
 	float movement[2] = { 0,0 };
@@ -74,64 +68,14 @@ void HandleKey(GLFWwindow* window, int key, int code, int actions, int modifiers
 	g_unhandledKeys.emplace(key, code, actions, modifiers);
 }
 
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-	HelloTriangle* app = (HelloTriangle*)glfwGetWindowUserPointer(window);
 	HandleKey(window, key, scancode, action, mods);
-	//auto& camera = app->GetCamera();
-	//if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-	//{
-	//	//https://stackoverflow.com/questions/7676971/pointing-to-a-function-that-is-a-class-member-glfw-setkeycallback
-	//	app->GetCamera().Translate(Direction::Forward);
-	//}
-
-	//if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-	//{
-	//	camera.Translate(Direction::Left);
-	//}
-
-	//if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-	//{
-	//	camera.Translate(Direction::Backward);
-	//}
-
-	//if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-	//{
-	//	camera.Translate(Direction::Right);
-	//}
-
-	//if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS)
-	//{
-	//	camera.Translate(Direction::Down);
-	//}
-
-	//if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
-	//{
-	//	camera.Translate(Direction::Up);
-	//}
-
-	//if (glfwGetKey(window, GLFW_KEY_L) == GLFW_PRESS)
-	//{
-	//	camera.Rotate(glm::vec3(0, 0, 1), 0.001f);
-	//}
-	//
-	//if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
-	//{
-	//	//m_sampleModel.Translate();
-	//}
-
-	//if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS)
-	//{
-	//	//m_sampleModel.Rotate(glm::vec3(0, 0, 1), 0.001f);
-	//}
 }
 
 void HelloTriangle::Run()
 {
 	InitWindow();
-	window = Window();
-
-	glfwSetKeyCallback(m_window, key_callback);
 
 	VulkanManager::CreateVulkanManager(m_window);
 	VulkanManager::GetVulkanManager().Initialize();
@@ -219,7 +163,7 @@ void HelloTriangle::DrawFrame()
 		float deltaTime = now - lastUpdate;
 		lastUpdate = now;
 
-		handle_input(this, deltaTime);
+		HandleInput(this, deltaTime);
 	}
 
 	g_camera->Update();
@@ -333,6 +277,8 @@ void HelloTriangle::InitWindow()
 	
 	// Detect resizing
 	glfwSetFramebufferSizeCallback(m_window, FrameBufferResizeCallback);
+
+	glfwSetKeyCallback(m_window, KeyCallback);
 }
 
 void HelloTriangle::InitImGui()
