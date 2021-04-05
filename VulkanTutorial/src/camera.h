@@ -39,6 +39,11 @@ public:
 	void Translate(glm::vec3 d);
 	void Rotate(glm::vec3 axis, float angle);
 	void Update();
+	void SetTarget(glm::vec3 target)
+	{
+		m_target = target;
+		UpdateForward();
+	}
 
 	glm::vec3 Eye() { return m_eye; }
 	glm::vec3 Up() { return m_up; }

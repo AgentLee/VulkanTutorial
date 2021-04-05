@@ -33,6 +33,9 @@
 #include "camera.h"
 #include "input_manager.h"
 
+
+class Window;
+
 class HelloTriangle
 {
 public:
@@ -42,6 +45,8 @@ public:
 	static void FrameBufferResizeCallback(GLFWwindow* window, int width, int height);
 
 	Camera& GetCamera() { return *g_camera; }
+
+	void ToggleResize(bool resized) { frameBufferResized = resized; }
 	
 private:
 	void InitWindow();
