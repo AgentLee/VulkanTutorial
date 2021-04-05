@@ -42,6 +42,8 @@ void ImGuiManager::SubmitDrawCall(uint32_t imageIndex, Camera& camera)
 		ImGui::InputFloat("Camera speed", &camera.m_speed, 0, 0.05f);
 	}
 	
+	m_active = ImGui::IsWindowHovered();
+	
 	ImGui::End();
 	
 	ImGui::Render();

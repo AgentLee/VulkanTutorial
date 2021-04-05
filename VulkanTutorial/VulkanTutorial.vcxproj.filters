@@ -143,13 +143,13 @@
     <ClInclude Include="src\input_manager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\window.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\command_pool.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\vk_object.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\window.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

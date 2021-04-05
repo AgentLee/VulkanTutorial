@@ -15,17 +15,8 @@ struct MouseEvent
 	bool enteredWindow = false;
 	bool started = true;
 	bool mouseDown = false;
-	// need to somehow lock the mouse to 0
 	float lastX = 400;
 	float lastY = 300;
-	float yaw = 0;
-	float pitch = 0;
-
-	double clickPosX = 0;
-	double clickPosY = 0;
-
-	double upPosX = 0;
-	double upPosY = 0;
 };
 
 struct KeyEvent
@@ -91,18 +82,25 @@ public:
 
 	static void MouseCallback(GLFWwindow* window, double xpos, double ypos)
 	{
-		if (!g_mouseEvent.enteredWindow)
+		auto& app = *static_cast<HelloTriangle*>(glfwGetWindowUserPointer(window));
+
+		// Don't do anything if the mouse is hovering over the ImGui window or if the mouse is outside the window.
+		if (app.GetImGui().m_active || !g_mouseEvent.enteredWindow)
 		{
 			return;
 		}
 
+		// If the mouse is up, save the position but don't move the camera.
+		// This will make sure the camera will continue to rotate correctly
+		// when the mouse isn't down otherwise the camera will almost "reset" 
 		if (!g_mouseEvent.mouseDown)
 		{
 			g_mouseEvent.lastX = xpos;
 			g_mouseEvent.lastY = ypos;
 			return;
 		}
-		
+
+		// If it's the first time the mouse is being used, set the last positions to the current position
 		if (g_mouseEvent.started)
 		{
 			g_mouseEvent.lastX = xpos;
@@ -110,36 +108,20 @@ public:
 			g_mouseEvent.started = false;
 		}
 
-		// not necessarily lastx but the position where we clicked.
-		
 		float xOffset = xpos - g_mouseEvent.lastX;
 		float yOffset = g_mouseEvent.lastY - ypos;
-
-		std::cout << xOffset << ", " << yOffset << std::endl;
-		
-		g_mouseEvent.lastX = xpos;
-		g_mouseEvent.lastY = ypos;
 
 		const float sensitivity = 0.001f;
 		xOffset *= sensitivity;
 		yOffset *= sensitivity;
 
-		g_mouseEvent.yaw += yOffset;
-		g_mouseEvent.pitch += xOffset;
+		// Rotate camera angle-axis since it's easier :)
+		app.GetCamera().Rotate(glm::vec3(0, 0, 1), xOffset);
+		app.GetCamera().Rotate(glm::vec3(1,0,0), yOffset);
 
-		//if (g_mouseEvent.pitch > 89.0f)
-		//	g_mouseEvent.pitch = 89.0f;
-		//if (g_mouseEvent.pitch < -89.0f)
-		//	g_mouseEvent.pitch = -89.0f;
-
-		glm::vec3 direction;
-		direction.x = cos(glm::radians(g_mouseEvent.yaw)) * cos(glm::radians(g_mouseEvent.pitch));
-		direction.y = sin(glm::radians(g_mouseEvent.pitch));
-		direction.z = sin(glm::radians(g_mouseEvent.yaw)) * cos(glm::radians(g_mouseEvent.pitch));
-
-		//static_cast<HelloTriangle*>(glfwGetWindowUserPointer(window))->GetCamera().SetTarget(glm::normalize(direction));
-		static_cast<HelloTriangle*>(glfwGetWindowUserPointer(window))->GetCamera().Rotate(glm::vec3(0, 0, 1), xOffset);
-		static_cast<HelloTriangle*>(glfwGetWindowUserPointer(window))->GetCamera().Rotate(glm::vec3(1,0, 0), yOffset);
+		// Capture the position for the next move
+		g_mouseEvent.lastX = xpos;
+		g_mouseEvent.lastY = ypos;
 	}
 
 	static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
@@ -149,16 +131,10 @@ public:
 			if (action == GLFW_PRESS)
 			{
 				g_mouseEvent.mouseDown = true;
-
-				glfwGetCursorPos(window, &g_mouseEvent.clickPosX, &g_mouseEvent.clickPosY);
-				//std::cout << "Left mouse down " << g_mouseEvent.clickPosX << ", " << g_mouseEvent.clickPosY << std::endl;
 			}
 			else if (action == GLFW_RELEASE)
 			{
 				g_mouseEvent.mouseDown = false;
-
-				glfwGetCursorPos(window, &g_mouseEvent.upPosX, &g_mouseEvent.upPosY);
-				//std::cout << "Left mouse up " << g_mouseEvent.upPosX << ", " << g_mouseEvent.upPosY << std::endl;
 			}
 		}
 	}
@@ -166,55 +142,5 @@ public:
 	static void MouseEnterCallback(GLFWwindow* window, int entered)
 	{
 		g_mouseEvent.enteredWindow = entered;
-
-		//if (entered)
-		//{
-		//	std::cout << "Entered window" << std::endl;
-		//}
-		//else
-		//{
-		//	std::cout << "Exited window" << std::endl;
-		//}
 	}
-};
-
-class Window
-{
-public:
-	Window()
-	{
-		//// Initialize GLFW library
-		//glfwInit();
-
-		//// Disable OpenGL
-		//glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-
-		//// Create window
-		//// A cool thing here is that you can specify which monitor to open the window on.
-		//m_window = glfwCreateWindow(WIDTH, HEIGHT, "Hello Triangle", nullptr, nullptr);
-
-		//// Set pointer to window
-		//glfwSetWindowUserPointer(m_window, this);
-
-		//// Detect resizing
-		//glfwSetFramebufferSizeCallback(m_window, FrameBufferResizeCallback);
-
-		//// Set callbacks
-		//glfwSetKeyCallback(m_window, KeyCallback);
-		//glfwSetCursorPosCallback(m_window, MouseCallback);
-		//glfwSetMouseButtonCallback(m_window, MouseButtonCallback);
-		//glfwSetCursorEnterCallback(m_window, MouseEnterCallback);
-	}
-	
-	~Window()
-	{
-	}
-
-	//static void FrameBufferResizeCallback(GLFWwindow* window, int width, int height)
-	//{
-	//	auto app = reinterpret_cast<HelloTriangle*>(glfwGetWindowUserPointer(window));
-	//	app->ToggleResize(true);
-	//}
-
-	GLFWwindow* m_window;
 };

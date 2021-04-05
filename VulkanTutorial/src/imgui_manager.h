@@ -28,4 +28,6 @@ public:
 	void CreateCommandBuffers() override;
 
 	void SetupImGui(GLFWwindow* window, size_t currentFrame);
+
+	bool m_active = false;
 };
