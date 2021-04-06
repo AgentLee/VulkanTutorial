@@ -31,6 +31,7 @@ class Vertex
 {
 public:
 	glm::vec3 position;
+	glm::vec3 normal;
 	glm::vec3 color;
 	glm::vec2 uv;
 	
@@ -47,10 +48,10 @@ public:
 		return desc;
 	}
 
-	static std::array<struct VkVertexInputAttributeDescription, 3> GetAttributeDescriptions()
+	static std::array<struct VkVertexInputAttributeDescription, 4> GetAttributeDescriptions()
 	{
 		// Describes how to handle vertex data.
-		std::array<VkVertexInputAttributeDescription, 3> desc{};
+		std::array<VkVertexInputAttributeDescription, 4> desc{};
 		{
 			// Position
 			{
@@ -74,6 +75,14 @@ public:
 				desc[2].location = 2;							// Where to find in the shader
 				desc[2].format = VK_FORMAT_R32G32_SFLOAT;		// Type of data
 				desc[2].offset = offsetof(Vertex, uv);			// Bytes between data
+			}
+
+			// Normal
+			{
+				desc[3].binding = 0;
+				desc[3].location = 3;
+				desc[3].format = VK_FORMAT_R32G32B32_SFLOAT;
+				desc[3].offset = offsetof(Vertex, normal);
 			}
 		}
 

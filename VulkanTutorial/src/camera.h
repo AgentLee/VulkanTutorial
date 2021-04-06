@@ -45,6 +45,31 @@ public:
 		UpdateForward();
 	}
 
+	struct CameraSaveSettings
+	{
+		glm::vec3 eye;
+		glm::vec3 target;
+		glm::vec3 up;
+		float fov, aspect, near, far;
+
+		CameraSaveSettings() {}
+		CameraSaveSettings(glm::vec3 eye, glm::vec3 target, glm::vec3 up, float fov, float aspect, float near, float far)
+		{
+			this->eye = eye;
+			this->target = target;
+			this->up = up;
+			this->fov = fov;
+			this->near = near;
+			this->far = far;
+		}
+	};
+
+	CameraSaveSettings m_defaultSettings;
+
+	void Reset();
+	void UpdateProjection();
+	void UpdateView();
+	
 	glm::vec3 Eye() { return m_eye; }
 	glm::vec3 Up() { return m_up; }
 	glm::vec3 Right() { return glm::normalize(glm::cross(m_up, m_forward)); }

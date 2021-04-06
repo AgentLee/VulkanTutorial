@@ -37,6 +37,12 @@ void Mesh::LoadModel(const char* path)
 					1 - attrib.texcoords[2 * index.texcoord_index + 1],	// TinyObj does some weird flipping.
 				};
 
+				vertex.normal = {
+					attrib.normals[3 * index.normal_index + 0],
+					attrib.normals[3 * index.normal_index + 1],
+					attrib.normals[3 * index.normal_index + 2],
+				};
+				
 				vertex.color = { 1, 1, 1 };
 			}
 

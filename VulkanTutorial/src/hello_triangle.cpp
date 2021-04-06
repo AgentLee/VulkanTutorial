@@ -31,13 +31,13 @@ void HelloTriangle::Run()
 	m_imguiManager.SetupImGui(m_window, m_currentFrame);
 #endif
 
-	g_camera = new Camera(glm::vec3(2, 2, 2), 
+	g_camera = new Camera(glm::vec3(0, 0, 10), 
 		glm::vec3(0,0,0), 
-		glm::vec3(0,0,1),	// hmm z is up
+		glm::vec3(0,1,0),
 		45.0f,
 		(float)VulkanManager::GetVulkanManager().GetSwapChainExtent().width / (float)VulkanManager::GetVulkanManager().GetSwapChainExtent().height,
 		0.1f, 
-		10.0f);
+		100.0f);
 	
 	MainLoop();
 

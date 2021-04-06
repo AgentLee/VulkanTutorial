@@ -36,13 +36,24 @@ void ImGuiManager::SubmitDrawCall(uint32_t imageIndex, Camera& camera)
 	ImGui::NewFrame();
 	//ImGui::ShowDemoWindow();
 
-	ImGui::Begin("Debug Panel");
+	ImGui::Begin("Camera properties");
+
+	m_active = ImGui::IsWindowHovered() || ImGui::IsAnyItemHovered();
 
 	{
-		ImGui::InputFloat("Camera speed", &camera.m_speed, 0, 0.05f);
+		if (ImGui::Button("Reset"))
+		{
+			camera.Reset();
+		}
+
+		if (ImGui::SliderFloat("Near", &camera.m_near, 0, 100) ||
+			ImGui::SliderFloat("Far", &camera.m_far, 0, 100))
+		{
+			camera.UpdateProjection();
+		}
+
+		ImGui::SliderFloat("Speed", &camera.m_speed, 0, 0.05f);
 	}
-	
-	m_active = ImGui::IsWindowHovered();
 	
 	ImGui::End();
 	
