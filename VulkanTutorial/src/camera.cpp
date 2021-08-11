@@ -1,5 +1,8 @@
 #include "camera.h"
 #include "helpers.h"
+
+#include "imgui_manager.h"
+
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/gtx/rotate_vector.hpp>
 
@@ -60,6 +63,26 @@ void Camera::Rotate(glm::vec3 axis, float angle)
 
 void Camera::Update()
 {
+#if IMGUI_ENABLED
+	ImGui::Begin("Camera properties");
+
+	// TODO: prevent moving camera when mouse is over menus.
+	//ImGui::IsWindowHovered() || ImGui::IsAnyItemHovered();
+
+	if (ImGui::Button("Reset"))
+	{
+		Reset();
+	}
+
+	if (ImGui::SliderFloat("Near", &m_near, 0, 100) ||
+		ImGui::SliderFloat("Far", &m_far, 0, 100))
+	{
+		UpdateProjection();
+	}
+
+	ImGui::SliderFloat("Speed", &m_speed, 0, 0.05f);
+#endif
+
 	m_viewMatrix = glm::lookAt(m_eye, m_target, m_up);
 }
 

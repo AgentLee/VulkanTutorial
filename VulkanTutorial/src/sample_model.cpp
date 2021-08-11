@@ -13,7 +13,7 @@ void SampleModel::Initialize()
 	CreateRenderPass();
 	CreateDescriptorSetLayout();
 	CreateGraphicsPipeline();
-	CreateCommandPool();
+	//CreateCommandPool();
 	
 	// Create multisampled color buffer
 	{
@@ -48,7 +48,8 @@ void SampleModel::Initialize()
 
 		m_depthImage.CreateView(depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 
-		VulkanManager::GetVulkanManager().TransitionImageLayout(m_commandPool.m_commandPool, m_depthImage.m_image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
+		auto& commandPool = VulkanManager::GetVulkanManager().GetCommandPool();
+		VulkanManager::GetVulkanManager().TransitionImageLayout(commandPool, m_depthImage.m_image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
 	}
 	
 	CreateFrameBuffers();
@@ -104,7 +105,8 @@ void SampleModel::Reinitialize()
 
 		m_depthImage.CreateView(depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 
-		VulkanManager::GetVulkanManager().TransitionImageLayout(m_commandPool.m_commandPool, m_depthImage.m_image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
+		auto& commandPool = VulkanManager::GetVulkanManager().GetCommandPool();
+		VulkanManager::GetVulkanManager().TransitionImageLayout(commandPool, m_depthImage.m_image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
 	}
 
 	CreateFrameBuffers();
@@ -121,6 +123,9 @@ void SampleModel::SubmitDrawCall(uint32_t imageIndex, Camera& camera)
 
 void SampleModel::Cleanup(bool recreateSwapchain = false)
 {
+	auto& commandBuffers = VulkanManager::GetVulkanManager().GetCommandBuffers();
+	auto& commandPool = VulkanManager::GetVulkanManager().GetCommandPool();
+	
 	if (recreateSwapchain)
 	{
 		m_colorImage.Cleanup();
@@ -131,7 +136,8 @@ void SampleModel::Cleanup(bool recreateSwapchain = false)
 			vkDestroyFramebuffer(VulkanManager::GetVulkanManager().GetDevice(), framebuffer, nullptr);
 		}
 
-		vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool.m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
+		if (commandBuffers.size() > 0)
+			vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), commandPool, static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
 
 		vkDestroyPipeline(VulkanManager::GetVulkanManager().GetDevice(), m_graphicsPipeline, nullptr);
 		vkDestroyPipelineLayout(VulkanManager::GetVulkanManager().GetDevice(), m_pipelineLayout, nullptr);
@@ -160,7 +166,7 @@ void SampleModel::Cleanup(bool recreateSwapchain = false)
 		vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), m_indexBuffer.m_buffer, nullptr);
 		vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), m_indexBuffer.m_memory, nullptr);
 
-		m_commandPool.Destroy();
+		vkDestroyCommandPool(VulkanManager::GetVulkanManager().GetDevice(), commandPool, nullptr);
 	}
 }
 
@@ -627,16 +633,16 @@ void SampleModel::CreateDescriptorPool()
 
 void SampleModel::CreateCommandPool()
 {
-	auto queueFamilyIndices = VulkanManager::GetVulkanManager().FindQueueFamilies(VulkanManager::GetVulkanManager().GetPhysicalDevice());
+	//auto queueFamilyIndices = VulkanManager::GetVulkanManager().FindQueueFamilies(VulkanManager::GetVulkanManager().GetPhysicalDevice());
 
-	VkCommandPoolCreateInfo poolInfo{};
-	{
-		poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();	// We want to draw, use the graphics family
-		poolInfo.flags = 0;
-	}
+	//VkCommandPoolCreateInfo poolInfo{};
+	//{
+	//	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	//	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();	// We want to draw, use the graphics family
+	//	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	//}
 
-	m_commandPool.Create(&poolInfo);
+	//vkCreateCommandPool(VulkanManager::GetVulkanManager().GetDevice(), &poolInfo, nullptr, &VulkanManager::GetVulkanManager().GetCommandPool());
 }
 
 void SampleModel::CreateFrameBuffers()
@@ -679,7 +685,12 @@ void SampleModel::CreateCommandBuffers()
 	// We need to allocate command buffers to be able write commands.
 	// Each image in the swap chain needs to have a command buffer written to.
 
-	m_commandBuffers.resize(m_frameBuffers.size());
+	auto& commandBuffers = vkManager.GetCommandBuffers();
+	auto& commandPool = vkManager.GetCommandPool();
+	
+	if (commandBuffers.size() == 0)
+		commandBuffers.resize(m_frameBuffers.size());
+	//m_commandBuffers.resize(m_frameBuffers.size());
 
 	std::array<VkClearValue, 2> clearValues{};
 	{
@@ -690,25 +701,25 @@ void SampleModel::CreateCommandBuffers()
 	VkCommandBufferAllocateInfo allocInfo{};
 	{
 		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		allocInfo.commandPool = m_commandPool.m_commandPool;
+		allocInfo.commandPool = commandPool;
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;	// Submit to queue for execution but cannot be called from other command buffers (secondary).
-		allocInfo.commandBufferCount = (uint32_t)m_commandBuffers.size();
+		allocInfo.commandBufferCount = (uint32_t)commandBuffers.size();
 
-		VK_ASSERT(vkAllocateCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), &allocInfo, m_commandBuffers.data()), "Failed to allocate command buffers");
+		VK_ASSERT(vkAllocateCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), &allocInfo, commandBuffers.data()), "Failed to allocate command buffers");
 	}
 
 	// Starting command buffer recording
-	for (auto i = 0; i < m_commandBuffers.size(); ++i)
+	for (auto i = 0; i < commandBuffers.size(); ++i)
 	{
 		// Describe how the command buffers are being used.
 		VkCommandBufferBeginInfo beginInfo{};
 		{
 			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-			beginInfo.flags = 0;	// How to use command buffer.
+			beginInfo.flags = 0;					// How to use command buffer.
 			beginInfo.pInheritanceInfo = nullptr;	// Only relevant for secondary command buffers - which state to inherit from primary buffer.
 		}
 
-		VK_ASSERT(vkBeginCommandBuffer(m_commandBuffers[i], &beginInfo), "Failed to begin recording command buffer");
+		VK_ASSERT(vkBeginCommandBuffer(commandBuffers[i], &beginInfo), "Failed to begin recording command buffer");
 
 		// Starting a render pass
 		VkRenderPassBeginInfo renderPassInfo{};
@@ -723,13 +734,13 @@ void SampleModel::CreateCommandBuffers()
 			renderPassInfo.pClearValues = clearValues.data();
 		}
 
-		vkCmdBeginRenderPass(m_commandBuffers[i],
+		vkCmdBeginRenderPass(commandBuffers[i],
 			&renderPassInfo,
 			VK_SUBPASS_CONTENTS_INLINE	// Details the render pass - It's a primary command buffer, everything will be sent in one go.
 		);
 
 		// Basic drawing
-		vkCmdBindPipeline(m_commandBuffers[i],
+		vkCmdBindPipeline(commandBuffers[i],
 			VK_PIPELINE_BIND_POINT_GRAPHICS,	// Graphics or compute pipeline	
 			m_graphicsPipeline
 		);
@@ -737,26 +748,28 @@ void SampleModel::CreateCommandBuffers()
 		// Bind vertex buffer
 		VkBuffer vertexBuffers[] = { m_vertexBuffer.m_buffer };
 		VkDeviceSize offsets[] = { 0 };
-		vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
+		vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);
 
 		// Bind index buffer
-		vkCmdBindIndexBuffer(m_commandBuffers[i], m_indexBuffer.m_buffer, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdBindIndexBuffer(commandBuffers[i], m_indexBuffer.m_buffer, 0, VK_INDEX_TYPE_UINT32);
 
 		// Bind descriptor sets
-		vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
+		vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
 
 		// Draw
-		vkCmdDrawIndexed(m_commandBuffers[i], static_cast<uint32_t>(m_mesh.m_indices.size()), 1, 0, 0, 0);
+		vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(m_mesh.m_indices.size()), 1, 0, 0, 0);
 
 		// End render pass
-		vkCmdEndRenderPass(m_commandBuffers[i]);
+		vkCmdEndRenderPass(commandBuffers[i]);
 
-		VK_ASSERT(vkEndCommandBuffer(m_commandBuffers[i]), "Failed to record command buffer");
+		VK_ASSERT(vkEndCommandBuffer(commandBuffers[i]), "Failed to record command buffer");
 	}
 }
 
 void SampleModel::CreateTextureImage()
 {
+	auto& commandPool = VulkanManager::GetVulkanManager().GetCommandPool();
+	
 	Texture texture(TEXTURE_PATH.c_str());
 
 	m_mipLevels = vkHelpers::CaclulateMipLevels(texture.width, texture.height);
@@ -785,14 +798,14 @@ void SampleModel::CreateTextureImage()
 		m_texture.m_image, m_texture.m_memory);
 
 	// Copy the staging buffer to the image
-	VulkanManager::GetVulkanManager().TransitionImageLayout(m_commandPool.m_commandPool, m_texture.m_image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, m_mipLevels);
-	VulkanManager::GetVulkanManager().CopyBufferToImage(m_commandPool.m_commandPool, stagingBuffer.m_buffer, m_texture.m_image, texture.width, texture.height);
+	VulkanManager::GetVulkanManager().TransitionImageLayout(commandPool, m_texture.m_image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, m_mipLevels);
+	VulkanManager::GetVulkanManager().CopyBufferToImage(commandPool, stagingBuffer.m_buffer, m_texture.m_image, texture.width, texture.height);
 
 	vkDestroyBuffer(VulkanManager::GetVulkanManager().GetDevice(), stagingBuffer.m_buffer, nullptr);
 	vkFreeMemory(VulkanManager::GetVulkanManager().GetDevice(), stagingBuffer.m_memory, nullptr);
 
 	// Generating mipmaps transitions the layout to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL.
-	VulkanManager::GetVulkanManager().GenerateMipMaps(m_commandPool.m_commandPool, m_texture.m_image, VK_FORMAT_R8G8B8A8_SRGB, texture.width, texture.height, m_mipLevels);
+	VulkanManager::GetVulkanManager().GenerateMipMaps(commandPool, m_texture.m_image, VK_FORMAT_R8G8B8A8_SRGB, texture.width, texture.height, m_mipLevels);
 }
 
 void SampleModel::CreateTextureImageView()

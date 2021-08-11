@@ -10,7 +10,6 @@ void ImGuiManager::Initialize()
 	CreateRenderPass();
 	CreateDescriptorSetLayout();
 	CreateGraphicsPipeline();
-	CreateCommandPool();
 	CreateFrameBuffers();
 	CreateDescriptorPool();
 	CreateDescriptorSet();
@@ -21,47 +20,29 @@ void ImGuiManager::Reinitialize()
 {
 	CreateRenderPass();
 	CreateGraphicsPipeline();
-	CreateCommandPool();
 	CreateFrameBuffers();
 	CreateDescriptorPool();
 	CreateDescriptorSet();
 	CreateCommandBuffers();
 }
 
-void ImGuiManager::SubmitDrawCall(uint32_t imageIndex, Camera& camera)
+void ImGuiManager::Begin()
 {
 	// Start the Dear ImGui frame
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
-	//ImGui::ShowDemoWindow();
+}
 
-	ImGui::Begin("Camera properties");
-
-	m_active = ImGui::IsWindowHovered() || ImGui::IsAnyItemHovered();
-
-	{
-		if (ImGui::Button("Reset"))
-		{
-			camera.Reset();
-		}
-
-		if (ImGui::SliderFloat("Near", &camera.m_near, 0, 100) ||
-			ImGui::SliderFloat("Far", &camera.m_far, 0, 100))
-		{
-			camera.UpdateProjection();
-		}
-
-		ImGui::SliderFloat("Speed", &camera.m_speed, 0, 0.05f);
-	}
-	
+void ImGuiManager::End()
+{
 	ImGui::End();
-	
 	ImGui::Render();
-	
-	// Submit ImGui commands
-	VK_ASSERT(vkResetCommandPool(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool.m_commandPool, 0), "");
+}
 
+void ImGuiManager::SubmitDrawCall(uint32_t imageIndex, Camera& camera)
+{
+	// Submit ImGui commands
 	VkCommandBufferBeginInfo info = {};
 	{
 		info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -94,10 +75,10 @@ void ImGuiManager::Cleanup(bool recreateSwapchain = false)
 		vkDestroyFramebuffer(VulkanManager::GetVulkanManager().GetDevice(), framebuffer, nullptr);
 	}
 
-	vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool.m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
+	//vkFreeCommandBuffers(VulkanManager::GetVulkanManager().GetDevice(), m_commandPool.m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
 
 	vkDestroyRenderPass(VulkanManager::GetVulkanManager().GetDevice(), m_renderPass, nullptr);
-	m_commandPool.Destroy();
+	//m_commandPool.Destroy();
 	
 	// Resources to destroy when the program ends
 	ImGui_ImplVulkan_Shutdown();
@@ -191,15 +172,14 @@ void ImGuiManager::CreateDescriptorPool()
 
 void ImGuiManager::CreateCommandPool()
 {
-	auto index = VulkanManager::GetVulkanManager().FindQueueFamilies(VulkanManager::GetVulkanManager().GetPhysicalDevice());
+	//auto index = VulkanManager::GetVulkanManager().FindQueueFamilies(VulkanManager::GetVulkanManager().GetPhysicalDevice());
 
-	// todo: move to new function
-	VkCommandPoolCreateInfo commandPoolCreateInfo = {};
-	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	commandPoolCreateInfo.queueFamilyIndex = index.graphicsFamily.value();
-	commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	//VkCommandPoolCreateInfo commandPoolCreateInfo = {};
+	//commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	//commandPoolCreateInfo.queueFamilyIndex = index.graphicsFamily.value();
+	//commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-	m_commandPool.Create(&commandPoolCreateInfo);
+	//m_commandPool.Create(&commandPoolCreateInfo);
 }
 
 void ImGuiManager::CreateFrameBuffers()
@@ -225,9 +205,11 @@ void ImGuiManager::CreateFrameBuffers()
 
 void ImGuiManager::CreateCommandBuffers()
 {
+	auto& commandPool = VulkanManager::GetVulkanManager().GetCommandPool();
+	
 	auto vkManager = VulkanManager::GetVulkanManager();
 	m_commandBuffers.resize(vkManager.GetSwapChainImageViews().size());
-	VKCreateCommandBuffers(vkManager.GetDevice(), m_commandBuffers.data(), static_cast<uint32_t>(m_commandBuffers.size()), m_commandPool.m_commandPool);
+	VKCreateCommandBuffers(vkManager.GetDevice(), m_commandBuffers.data(), static_cast<uint32_t>(m_commandBuffers.size()), commandPool);
 }
 
 void ImGuiManager::SetupImGui(GLFWwindow* window, size_t currentFrame)
@@ -268,8 +250,9 @@ void ImGuiManager::SetupImGui(GLFWwindow* window, size_t currentFrame)
 	// Upload Fonts
 	{
 		// Use any command queue
-		VkCommandPool command_pool = GetCommandPool();
-		VK_ASSERT(vkResetCommandPool(VulkanManager::GetVulkanManager().GetDevice(), command_pool, 0), "");
+		auto& commandPool = VulkanManager::GetVulkanManager().GetCommandPool();
+		VkCommandPool command_pool = commandPool;
+		//VK_ASSERT(vkResetCommandPool(VulkanManager::GetVulkanManager().GetDevice(), command_pool, 0), "");
 
 		VkCommandBuffer command_buffer = GetCommandBuffers()[currentFrame];
 

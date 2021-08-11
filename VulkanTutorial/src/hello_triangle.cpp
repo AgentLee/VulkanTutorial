@@ -16,8 +16,6 @@
 #include "../libs/imgui/imgui_impl_glfw.h"
 #include "../libs/imgui/imgui_impl_vulkan.h"
 
-#define IMGUI_ENABLED true
-
 void HelloTriangle::Run()
 {
 	InitWindow();
@@ -43,7 +41,7 @@ void HelloTriangle::Run()
 
 	Cleanup();
 }
-
+static bool test;
 void HelloTriangle::MainLoop()
 {
 	while (!glfwWindowShouldClose(m_window))
@@ -66,6 +64,10 @@ void HelloTriangle::DrawFrame()
 	// -Fences used for syncing rendering
 	// -Semaphores used for syncing operations across command queues
 
+#if IMGUI_ENABLED
+	m_imguiManager.Begin();
+#endif
+	
 	vkWaitForFences(VulkanManager::GetVulkanManager().GetDevice(), 1, &VulkanManager::GetVulkanManager().GetInFlightFences()[m_currentFrame], VK_TRUE, UINT64_MAX);
 
 	uint32_t imageIndex;	// Store index of the image from the swap chain.
@@ -102,21 +104,22 @@ void HelloTriangle::DrawFrame()
 	VkSemaphore signalSemaphores[] = { VulkanManager::GetVulkanManager().GetRenderFinishedSemaphores()[m_currentFrame] };
 
 	InputHandler::Update(this);
-
+	
 	g_camera->Update();
 	
 	// Update uniforms
 	m_sampleModel.SubmitDrawCall(imageIndex, *g_camera);
 
 #if IMGUI_ENABLED
+	m_imguiManager.End();
+	
 	// Submit ImGui commands
 	m_imguiManager.SubmitDrawCall(imageIndex, *g_camera);
-#endif
-
-#if IMGUI_ENABLED
+	
 	std::array<VkCommandBuffer, 2> submitCommandBuffers =
 	{
-		m_sampleModel.m_commandBuffers[imageIndex],
+		//m_sampleModel.m_commandBuffers[imageIndex],
+		VulkanManager::GetVulkanManager().GetCommandBuffers()[imageIndex],
 		m_imguiManager.GetCommandBuffers()[imageIndex]
 	};
 #else
@@ -207,7 +210,7 @@ void HelloTriangle::InitWindow()
 
 	// Create window
 	// A cool thing here is that you can specify which monitor to open the window on.
-	m_window = glfwCreateWindow(WIDTH, HEIGHT, "Hello Triangle", nullptr, nullptr);
+	m_window = glfwCreateWindow(WIDTH, HEIGHT, "3D N-Gin", nullptr, nullptr);
 
 	// Set pointer to window
 	glfwSetWindowUserPointer(m_window, this);

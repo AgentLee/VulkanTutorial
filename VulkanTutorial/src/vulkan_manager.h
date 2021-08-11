@@ -115,6 +115,27 @@ public:
 	VkDebugUtilsMessengerEXT& GetDebugMessenger() { return m_debugMessenger; }
 
 	GLFWwindow* GetWindow() { return m_window; };
+
+	std::vector<VkCommandBuffer>& GetCommandBuffers() { return m_globalCommandBuffers; }
+	std::vector<VkCommandBuffer> m_globalCommandBuffers;
+
+	VkCommandPool& GetCommandPool() { return m_commandPool;}
+	VkCommandPool m_commandPool;
+
+	void CreateCommandPool()
+	{
+		auto queueFamilyIndices = FindQueueFamilies(GetPhysicalDevice());
+
+		VkCommandPoolCreateInfo poolInfo{};
+		{
+			poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+			poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();	// We want to draw, use the graphics family
+			poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+		}
+
+		vkCreateCommandPool(GetDevice(), &poolInfo, nullptr, &GetCommandPool());
+	}
+
 private:
 	// Vulkan
 	VkInstance m_instance;

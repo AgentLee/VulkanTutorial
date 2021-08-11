@@ -6,9 +6,10 @@
 
 #include <vector>
 
-
 #include "helpers.h"
 #include "vulkan_base.h"
+
+#define IMGUI_ENABLED true
 
 class ImGuiManager : public VulkanBase
 {
@@ -28,6 +29,15 @@ public:
 	void CreateCommandBuffers() override;
 
 	void SetupImGui(GLFWwindow* window, size_t currentFrame);
+	void Begin();
+	void End();
+	void SetActive(bool active) { m_active = active; }
 
 	bool m_active = false;
+
+	std::vector<VkCommandBuffer>& GetCommandBuffers() { return m_commandBuffers; }
+	std::vector<VkCommandBuffer> m_commandBuffers;
+
+	//VkCommandPool& GetCommandPool() { return m_commandPool.m_commandPool; }
+	//CommandPool m_commandPool;
 };

@@ -18,6 +18,7 @@ void VulkanManager::Initialize()
 	CreateSwapChain();
 	CreateImageViews();
 	CreateSyncObjects();
+	CreateCommandPool();
 }
 
 void VulkanManager::CreateInstance()
