@@ -32,7 +32,7 @@ void VulkanManager::CreateInstance()
 	VkApplicationInfo appInfo{};
 	{
 		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-		appInfo.pApplicationName = "Hello Triangle";
+		appInfo.pApplicationName = "N-Gin";
 		appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 		appInfo.pEngineName = "N-Gin";
 		appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);

@@ -81,6 +81,8 @@ void Camera::Update()
 	}
 
 	ImGui::SliderFloat("Speed", &m_speed, 0, 0.05f);
+
+	ImGui::End();
 #endif
 
 	m_viewMatrix = glm::lookAt(m_eye, m_target, m_up);

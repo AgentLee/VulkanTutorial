@@ -11,6 +11,8 @@
 #include <cstdint>
 #include <algorithm>
 #include <unordered_map>
+#include <filesystem>
+#include <iostream>
 
 #include "window.h"
 #include "../libs/imgui/imgui_impl_glfw.h"
@@ -66,6 +68,8 @@ void HelloTriangle::DrawFrame()
 
 #if IMGUI_ENABLED
 	m_imguiManager.Begin();
+
+	DrawMenu();
 #endif
 	
 	vkWaitForFences(VulkanManager::GetVulkanManager().GetDevice(), 1, &VulkanManager::GetVulkanManager().GetInFlightFences()[m_currentFrame], VK_TRUE, UINT64_MAX);
@@ -111,14 +115,11 @@ void HelloTriangle::DrawFrame()
 	m_sampleModel.SubmitDrawCall(imageIndex, *g_camera);
 
 #if IMGUI_ENABLED
-	m_imguiManager.End();
-	
 	// Submit ImGui commands
 	m_imguiManager.SubmitDrawCall(imageIndex, *g_camera);
 	
 	std::array<VkCommandBuffer, 2> submitCommandBuffers =
 	{
-		//m_sampleModel.m_commandBuffers[imageIndex],
 		VulkanManager::GetVulkanManager().GetCommandBuffers()[imageIndex],
 		m_imguiManager.GetCommandBuffers()[imageIndex]
 	};
@@ -270,6 +271,41 @@ void HelloTriangle::CleanupSwapChain()
 	}
 
 	vkDestroySwapchainKHR(VulkanManager::GetVulkanManager().GetDevice(), VulkanManager::GetVulkanManager().GetSwapChain(), nullptr);
+}
+
+void HelloTriangle::DrawMenu()
+{
+	namespace fs = std::filesystem;
+
+
+	const std::string path = "D:/Development/VulkanTutorial/models/";
+
+	//https://www.codegrepper.com/code-examples/cpp/c%2B%2B+get+file+list+of+directory
+	std::vector<std::string> modelPaths;
+	for (const auto& f : fs::directory_iterator(path))
+	{
+		auto filePath = f.path().string();
+		modelPaths.push_back(filePath);
+	}
+
+	ImGui::Begin("Models");
+	{
+		int curr = 0;
+		for (int i = 0; i < modelPaths.size(); ++i)
+		{
+			const bool isSelected = curr == i;
+			if (ImGui::Selectable(modelPaths[i].c_str(), isSelected))
+			{
+				curr = i;
+			}
+
+			if (isSelected)
+			{
+				ImGui::SetItemDefaultFocus();
+			}
+		}
+	}
+	ImGui::End();
 }
 
 void HelloTriangle::Cleanup()

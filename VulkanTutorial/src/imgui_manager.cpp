@@ -26,22 +26,21 @@ void ImGuiManager::Reinitialize()
 	CreateCommandBuffers();
 }
 
+// TODO: Need to rename these functions.
 void ImGuiManager::Begin()
 {
 	// Start the Dear ImGui frame
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
-}
 
-void ImGuiManager::End()
-{
-	ImGui::End();
-	ImGui::Render();
+	//ImGui::Begin("Debug Panel");
 }
 
 void ImGuiManager::SubmitDrawCall(uint32_t imageIndex, Camera& camera)
 {
+	ImGui::Render();
+
 	// Submit ImGui commands
 	VkCommandBufferBeginInfo info = {};
 	{
